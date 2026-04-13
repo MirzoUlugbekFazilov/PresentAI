@@ -852,10 +852,10 @@ def generate_image(prompt, img_w=1024, img_h=1024):
     }
 
     for api_url in api_urls:
-        for attempt in range(3):
+        for attempt in range(2):
             try:
                 print(f"[PresentAI] Image attempt {attempt + 1} via {api_url.split('/')[2]}...")
-                resp = requests.post(api_url, headers=headers, json=payload, timeout=120)
+                resp = requests.post(api_url, headers=headers, json=payload, timeout=10)
                 if resp.status_code == 200:
                     ct = resp.headers.get("Content-Type", "")
                     if "image" in ct or len(resp.content) > 1000:
@@ -864,15 +864,8 @@ def generate_image(prompt, img_w=1024, img_h=1024):
                     else:
                         print(f"[PresentAI] Unexpected response: {resp.text[:200]}")
                 elif resp.status_code == 503:
-                    try:
-                        err = resp.json()
-                        wait = min(int(err.get("estimated_time", 20)) + 1, 60)
-                    except Exception:
-                        wait = 20
-                    print(f"[PresentAI] Model loading, waiting {wait}s...")
-                    if attempt < 2:
-                        time.sleep(wait)
-                        continue
+                    print(f"[PresentAI] Model loading (503), skipping wait...")
+                    break  # Try next URL immediately
                 else:
                     print(f"[PresentAI] Image API error {resp.status_code}: {resp.text[:200]}")
                     if resp.status_code in (401, 403):
