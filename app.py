@@ -852,17 +852,39 @@ def generate_image(prompt, img_w=1024, img_h=1024):
     }
 
     for api_url in api_urls:
-        for attempt in range(2):
+        for attempt in range(3):
             try:
-                resp = requests.post(api_url, headers=headers, json=payload, timeout=10)
+                print(f"[PresentAI] Image attempt {attempt + 1} via {api_url.split('/')[2]}...")
+                resp = requests.post(api_url, headers=headers, json=payload, timeout=120)
                 if resp.status_code == 200:
                     ct = resp.headers.get("Content-Type", "")
                     if "image" in ct or len(resp.content) > 1000:
+                        print(f"[PresentAI] Image generated ({len(resp.content)} bytes)")
                         return BytesIO(resp.content)
-                elif resp.status_code in (401, 403):
-                    return None
-            except Exception:
-                pass
+                    else:
+                        print(f"[PresentAI] Unexpected response: {resp.text[:200]}")
+                elif resp.status_code == 503:
+                    try:
+                        err = resp.json()
+                        wait = min(int(err.get("estimated_time", 20)) + 1, 60)
+                    except Exception:
+                        wait = 20
+                    print(f"[PresentAI] Model loading, waiting {wait}s...")
+                    if attempt < 2:
+                        time.sleep(wait)
+                        continue
+                else:
+                    print(f"[PresentAI] Image API error {resp.status_code}: {resp.text[:200]}")
+                    if resp.status_code in (401, 403):
+                        print("[PresentAI] Auth error — check HF_API_KEY in .env")
+                        return None
+                    break  # Try next URL
+            except requests.exceptions.Timeout:
+                print(f"[PresentAI] Image request timed out (attempt {attempt + 1})")
+            except Exception as e:
+                print(f"[PresentAI] Image error: {e}")
+        # If this URL failed all attempts, try next URL
+    print("[PresentAI] All image generation attempts failed")
     return None
 
 
