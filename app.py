@@ -4,6 +4,7 @@ from dotenv import load_dotenv
 import os
 import time
 import requests
+import concurrent.futures
 from openai import OpenAI
 from pptx import Presentation
 from pptx.util import Inches, Pt
@@ -851,39 +852,17 @@ def generate_image(prompt, img_w=1024, img_h=1024):
     }
 
     for api_url in api_urls:
-        for attempt in range(3):
+        for attempt in range(2):
             try:
-                print(f"[PresentAI] Image attempt {attempt + 1} via {api_url.split('/')[2]}...")
-                resp = requests.post(api_url, headers=headers, json=payload, timeout=120)
+                resp = requests.post(api_url, headers=headers, json=payload, timeout=10)
                 if resp.status_code == 200:
                     ct = resp.headers.get("Content-Type", "")
                     if "image" in ct or len(resp.content) > 1000:
-                        print(f"[PresentAI] Image generated ({len(resp.content)} bytes)")
                         return BytesIO(resp.content)
-                    else:
-                        print(f"[PresentAI] Unexpected response: {resp.text[:200]}")
-                elif resp.status_code == 503:
-                    try:
-                        err = resp.json()
-                        wait = min(int(err.get("estimated_time", 20)) + 1, 60)
-                    except Exception:
-                        wait = 20
-                    print(f"[PresentAI] Model loading, waiting {wait}s...")
-                    if attempt < 2:
-                        time.sleep(wait)
-                        continue
-                else:
-                    print(f"[PresentAI] Image API error {resp.status_code}: {resp.text[:200]}")
-                    if resp.status_code in (401, 403):
-                        print("[PresentAI] Auth error — check HF_API_KEY in .env")
-                        return None
-                    break  # Try next URL
-            except requests.exceptions.Timeout:
-                print(f"[PresentAI] Image request timed out (attempt {attempt + 1})")
-            except Exception as e:
-                print(f"[PresentAI] Image error: {e}")
-        # If this URL failed all attempts, try next URL
-    print("[PresentAI] All image generation attempts failed")
+                elif resp.status_code in (401, 403):
+                    return None
+            except Exception:
+                pass
     return None
 
 
@@ -1944,15 +1923,29 @@ def generate_ppt():
                 slides[i] = _get_default_slide(i, user_prompt)
             # Normalize the slide data to ensure all required keys exist
             slides[i] = _normalize_slide_data(i, slides[i], designs)
-        # Generate 4 images: slide 1 (portrait), slides 4, 6, 9 (square)
+        # Generate 4 images in parallel: slide 1 (portrait), slides 4, 6, 9 (square)
         images = {}
+        img_tasks = {}
         title_img_prompt = content.get("title_image_prompt", "")
         if title_img_prompt:
-            images[1] = generate_image(title_img_prompt, img_w=768, img_h=1152)
+            img_tasks[1] = (title_img_prompt, 768, 1152)
         for sn in [4, 6, 9]:
             prompt = slides.get(sn, {}).get("image_prompt", "")
             if prompt:
-                images[sn] = generate_image(prompt)
+                img_tasks[sn] = (prompt, 1024, 1024)
+        if img_tasks:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+                futures = {
+                    executor.submit(generate_image, t[0], t[1], t[2]): sn
+                    for sn, t in img_tasks.items()
+                }
+                done, _ = concurrent.futures.wait(futures, timeout=25)
+                for fut in done:
+                    sn = futures[fut]
+                    try:
+                        images[sn] = fut.result()
+                    except Exception:
+                        pass
 
         slide_1_hero_title(prs, raw_title, subtitle, images.get(1))
 
