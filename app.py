@@ -1,3 +1,4 @@
+@@ -1,2060 +1,2061 @@
 from flask import Flask, render_template, request, redirect, session, send_file, url_for, flash, jsonify
 import mysql.connector
 from dotenv import load_dotenv
@@ -814,83 +815,64 @@ def generate_image(prompt, img_w=1024, img_h=1024):
         print("[PresentAI] HF_API_KEY is empty — skipping image generation")
         return None
 
-    api_url = "https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-schnell"
+    # Try multiple API endpoints (router + direct inference)
+    api_urls = [
+        "https://router.huggingface.co/hf-inference/models/black-forest-labs/FLUX.1-schnell",
+        "https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-schnell",
+    ]
     headers = {
         "Authorization": f"Bearer {HF_API_KEY}",
         "Content-Type": "application/json",
-        "x-use-cache": "false",
     }
     enhanced = (
         "Ultra sharp 4K professional photograph, crystal clear details, "
         "highly detailed, sharp focus, studio lighting, vibrant colors, "
-        "absolutely no text, no words, no letters, no numbers, no signs, " + prompt
+        "no blurry elements, absolutely no text, no words, no letters, "
+        "no numbers, no labels, no signs, no writing, no captions, "
+        "no watermarks, no logos, text-free image only, " + prompt
     )
     payload = {
         "inputs": enhanced,
         "parameters": {
             "width": img_w,
             "height": img_h,
-            "num_inference_steps": 4,
         },
     }
 
-    for attempt in range(4):
-        try:
-            print(f"[PresentAI] Image attempt {attempt + 1}...")
-            resp = requests.post(api_url, headers=headers, json=payload, timeout=120)
-
-            if resp.status_code == 200:
-                ct = resp.headers.get("Content-Type", "")
-                if "image" in ct or (len(resp.content) > 5000 and resp.content[:4] in [b'\xff\xd8\xff\xe0', b'\x89PNG', b'GIF8', b'RIFF']):
-                    print(f"[PresentAI] Image generated successfully ({len(resp.content)} bytes)")
-                    return BytesIO(resp.content)
-                else:
-                    # Might be JSON error wrapped in 200
+    for api_url in api_urls:
+        for attempt in range(3):
+            try:
+                print(f"[PresentAI] Image attempt {attempt + 1} via {api_url.split('/')[2]}...")
+                resp = requests.post(api_url, headers=headers, json=payload, timeout=120)
+                if resp.status_code == 200:
+                    ct = resp.headers.get("Content-Type", "")
+                    if "image" in ct or len(resp.content) > 1000:
+                        print(f"[PresentAI] Image generated ({len(resp.content)} bytes)")
+                        return BytesIO(resp.content)
+                    else:
+                        print(f"[PresentAI] Unexpected response: {resp.text[:200]}")
+                elif resp.status_code == 503:
                     try:
                         err = resp.json()
-                        print(f"[PresentAI] Unexpected 200 response: {err}")
-                        wait = err.get("estimated_time", 20)
-                        time.sleep(min(wait, 30))
+                        wait = min(int(err.get("estimated_time", 20)) + 1, 60)
                     except Exception:
-                        print(f"[PresentAI] Non-image 200 response, {len(resp.content)} bytes")
-                    continue
-
-            elif resp.status_code == 503:
-                try:
-                    err = resp.json()
-                    wait = min(int(err.get("estimated_time", 25)) + 2, 60)
-                except Exception:
-                    wait = 25
-                print(f"[PresentAI] Model loading, waiting {wait}s...")
-                time.sleep(wait)
-                continue
-
-            elif resp.status_code in (401, 403):
-                print("[PresentAI] Auth error — check HF_API_KEY has WRITE permission")
-                return None
-
-            elif resp.status_code == 429:
-                print("[PresentAI] Rate limited, waiting 30s...")
-                time.sleep(30)
-                continue
-
-            else:
-                print(f"[PresentAI] Error {resp.status_code}: {resp.text[:300]}")
-                if attempt < 3:
-                    time.sleep(10)
-                    continue
-                return None
-
-        except requests.exceptions.Timeout:
-            print(f"[PresentAI] Timeout on attempt {attempt + 1}")
-            if attempt < 3:
-                time.sleep(5)
-        except Exception as e:
-            print(f"[PresentAI] Exception: {e}")
-            if attempt < 3:
-                time.sleep(5)
-
-    print("[PresentAI] All image attempts failed")
+                        wait = 20
+                    print(f"[PresentAI] Model loading, waiting {wait}s...")
+                    if attempt < 2:
+                        time.sleep(wait)
+                        continue
+                else:
+                    print(f"[PresentAI] Image API error {resp.status_code}: {resp.text[:200]}")
+                    if resp.status_code in (401, 403):
+                        print("[PresentAI] Auth error — check HF_API_KEY in .env")
+                        return None
+                    break  # Try next URL
+            except requests.exceptions.Timeout:
+                print(f"[PresentAI] Image request timed out (attempt {attempt + 1})")
+            except Exception as e:
+                print(f"[PresentAI] Image error: {e}")
+        # If this URL failed all attempts, try next URL
+    print("[PresentAI] All image generation attempts failed")
     return None
 
 
@@ -1994,15 +1976,6 @@ def google_callback():
     else:
         session["language"] = "English"
     return redirect("/dashboard")
-
-@app.route("/test-image")
-def test_image():
-    if "user" not in session:
-        return redirect("/login")
-    result = generate_image("a serene mountain lake at sunset", 512, 512)
-    if result:
-        return send_file(result, mimetype="image/jpeg")
-    return "Image generation failed — check server logs for details", 500
 
 @app.route("/dashboard")
 def dashboard():
