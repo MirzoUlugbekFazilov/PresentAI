@@ -1127,23 +1127,32 @@ def slide_2a_dot_badge_rows(prs, data):
     for i, c in enumerate(cards):
         y = CT + i * (row_h + row_gap)
         color = colors[i % 3]
-        # Dot badge
-        add_dot_badge(slide, Inches(MG + 0.02), Inches(y + 0.07), color)
+        # Dot badge — center (y+0.20) aligns with heading textbox center (0.40" tall → mid at y+0.20)
+        # Dot diameter 0.12" → top at y+0.20-0.06 = y+0.14
+        add_dot_badge(slide, Inches(MG + 0.02), Inches(y + 0.14), color)
         # Card heading
         hbox = slide.shapes.add_textbox(Inches(MG + 0.28), Inches(y),
                                          Inches(CW - 0.28), Inches(0.40))
         hf = hbox.text_frame
         hf.clear()
         hf.word_wrap = True
+        hf.margin_top = Inches(0.04)
         hp = hf.paragraphs[0]
         hr = hp.add_run()
         hr.text = c["title"]
         hr.font.size = Pt(18)
         hr.font.bold = True
         hr.font.color.rgb = CHARCOAL
-        # Bullets
-        add_bullet_text(slide, Inches(MG + 0.28), Inches(y + 0.42),
-                        Inches(CW - 0.28), Inches(row_h - 0.45),
+        # Thin colored accent underline below heading (ties dot color to section)
+        underline = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE,
+                                           Inches(MG + 0.28), Inches(y + 0.43),
+                                           Inches(2.00), Inches(0.022))
+        underline.fill.solid()
+        underline.fill.fore_color.rgb = color
+        underline.line.fill.background()
+        # Bullets — start below the underline with a small gap
+        add_bullet_text(slide, Inches(MG + 0.28), Inches(y + 0.50),
+                        Inches(CW - 0.28), Inches(row_h - 0.53),
                         c["bullets"], bullet_color=color, font_size=13)
     add_slide_number(slide, 2, TOTAL_SLIDES)
 
@@ -1330,13 +1339,28 @@ def slide_6a_bullets_banner(prs, data, image_bytes=None):
     # Image on left
     img_sz = 4.50
     add_square_image(slide, image_bytes, MG, CT, size=img_sz)
-    # Bullets beside image
+    # Subtle vertical separator between image and text column
+    sep_x = MG + img_sz + GAP / 2 - 0.02
+    sep = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE,
+                                 Inches(sep_x), Inches(CT + 0.10),
+                                 Inches(0.025), Inches(banner_top - CT - 0.30))
+    sep.fill.solid()
+    sep.fill.fore_color.rgb = RGBColor(0xCC, 0xD5, 0xDF)
+    sep.line.fill.background()
+    # Bullets beside image — vertically centered in available space
     txt_x = MG + img_sz + GAP
     txt_w = SW - txt_x - MG
     bullet_h = banner_top - CT - 0.20
-    add_bullet_text(slide, Inches(txt_x), Inches(CT),
-                    Inches(txt_w), Inches(bullet_h),
-                    data["bullets"], bullet_color=ROYAL_BLUE, font_size=15)
+    font_size = 15
+    # Estimate the rendered height of the bullet block to center it
+    line_h = (font_size + 8) / 72.0         # line_spacing in inches (23pt)
+    spc_h  = 5 / 72.0                        # space_before per bullet
+    n_bul  = len(data["bullets"])
+    est_h  = 0.22 + n_bul * (line_h + spc_h) # top/bottom margins + content
+    v_offset = max(0.0, (bullet_h - est_h) / 2.0)
+    add_bullet_text(slide, Inches(txt_x), Inches(CT + v_offset),
+                    Inches(txt_w), Inches(min(est_h + 0.20, bullet_h)),
+                    data["bullets"], bullet_color=ROYAL_BLUE, font_size=font_size)
     # Dark stat banner
     banner = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE,
                                     Inches(0), Inches(banner_top),
