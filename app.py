@@ -789,6 +789,7 @@ def generate_slide_content(prompt):
                     {"role": "user", "content": f"Create a presentation about: {prompt}"}
                 ],
                 temperature=0.7,
+                timeout=60,  # 60-second cap; prevents hanging the gunicorn worker
             )
             raw = r.choices[0].message.content.strip()
             # Strip markdown code fences if present
@@ -851,18 +852,19 @@ def generate_image(prompt, img_w=1024, img_h=1024):
         },
     }
 
+    # One attempt per URL with a generous timeout so FLUX.1-schnell has time to respond.
+    # The outer concurrent.futures.wait(timeout=25) caps the total wait for all images.
     for api_url in api_urls:
-        for attempt in range(2):
-            try:
-                resp = requests.post(api_url, headers=headers, json=payload, timeout=10)
-                if resp.status_code == 200:
-                    ct = resp.headers.get("Content-Type", "")
-                    if "image" in ct or len(resp.content) > 1000:
-                        return BytesIO(resp.content)
-                elif resp.status_code in (401, 403):
-                    return None
-            except Exception:
-                pass
+        try:
+            resp = requests.post(api_url, headers=headers, json=payload, timeout=22)
+            if resp.status_code == 200:
+                ct = resp.headers.get("Content-Type", "")
+                if "image" in ct or len(resp.content) > 1000:
+                    return BytesIO(resp.content)
+            elif resp.status_code in (401, 403, 429):
+                return None  # Auth/rate-limit errors: no point retrying
+        except Exception:
+            pass
     return None
 
 
@@ -1958,18 +1960,21 @@ def generate_ppt():
             if prompt:
                 img_tasks[sn] = (prompt, 1024, 1024)
         if img_tasks:
-            with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
-                futures = {
-                    executor.submit(generate_image, t[0], t[1], t[2]): sn
-                    for sn, t in img_tasks.items()
-                }
-                done, _ = concurrent.futures.wait(futures, timeout=25)
-                for fut in done:
-                    sn = futures[fut]
-                    try:
-                        images[sn] = fut.result()
-                    except Exception:
-                        pass
+            # Do NOT use `with` executor — its __exit__ calls shutdown(wait=True),
+            # which blocks until every future finishes even after our timeout.
+            executor = concurrent.futures.ThreadPoolExecutor(max_workers=4)
+            futures = {
+                executor.submit(generate_image, t[0], t[1], t[2]): sn
+                for sn, t in img_tasks.items()
+            }
+            done, _ = concurrent.futures.wait(futures, timeout=25)
+            executor.shutdown(wait=False)  # Release the main thread immediately
+            for fut in done:
+                sn = futures[fut]
+                try:
+                    images[sn] = fut.result()
+                except Exception:
+                    pass
 
         slide_1_hero_title(prs, raw_title, subtitle, images.get(1))
 
