@@ -820,69 +820,72 @@ def generate_slide_content(prompt):
     return None
 
 
+# Models to try, in order. FLUX.1-schnell is NOT served by the `hf-inference`
+# provider — it lives on nscale / fal-ai / wavespeed, so it must be reached
+# through the router's `provider="auto"` selection. SD-3 is the hf-inference
+# fallback for when no third-party provider has capacity.
+IMAGE_MODELS = [
+    "black-forest-labs/FLUX.1-schnell",
+    "stabilityai/stable-diffusion-3-medium-diffusers",
+]
+
+_IMG_STYLE_PREFIX = (
+    "Ultra sharp 4K professional photograph, crystal clear details, "
+    "highly detailed, sharp focus, studio lighting, vibrant colors, "
+    "no blurry elements, absolutely no text, no words, no letters, "
+    "no numbers, no labels, no signs, no writing, no captions, "
+    "no watermarks, no logos, text-free image only, "
+)
+
+
 def generate_image(prompt, img_w=1024, img_h=1024):
-    """Generate an image using HF FLUX.1-schnell. Returns BytesIO or None."""
+    """Generate an image via the HF Inference Providers router. Returns BytesIO or None."""
     if not HF_API_KEY:
         print("[PresentAI] HF_API_KEY is empty — skipping image generation")
         return None
 
-    # Try multiple API endpoints (router + direct inference)
-    api_urls = [
-        "https://router.huggingface.co/hf-inference/models/black-forest-labs/FLUX.1-schnell",
-        "https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-schnell",
-    ]
-    headers = {
-        "Authorization": f"Bearer {HF_API_KEY}",
-        "Content-Type": "application/json",
-    }
-    enhanced = (
-        "Ultra sharp 4K professional photograph, crystal clear details, "
-        "highly detailed, sharp focus, studio lighting, vibrant colors, "
-        "no blurry elements, absolutely no text, no words, no letters, "
-        "no numbers, no labels, no signs, no writing, no captions, "
-        "no watermarks, no logos, text-free image only, " + prompt
-    )
-    payload = {
-        "inputs": enhanced,
-        "parameters": {
-            "width": img_w,
-            "height": img_h,
-        },
-    }
+    from huggingface_hub import InferenceClient
+    from huggingface_hub.errors import HfHubHTTPError
 
-    for api_url in api_urls:
-        for attempt in range(3):
+    enhanced = _IMG_STYLE_PREFIX + prompt
+    # provider="auto" lets the router pick whichever provider currently serves
+    # the model, instead of us hard-coding one that may have dropped it.
+    client = InferenceClient(provider="auto", api_key=HF_API_KEY, timeout=120)
+
+    for model in IMAGE_MODELS:
+        for attempt in range(2):
             try:
-                print(f"[PresentAI] Image attempt {attempt + 1} via {api_url.split('/')[2]}...")
-                resp = requests.post(api_url, headers=headers, json=payload, timeout=120)
-                if resp.status_code == 200:
-                    ct = resp.headers.get("Content-Type", "")
-                    if "image" in ct or len(resp.content) > 1000:
-                        print(f"[PresentAI] Image generated ({len(resp.content)} bytes)")
-                        return BytesIO(resp.content)
-                    else:
-                        print(f"[PresentAI] Unexpected response: {resp.text[:200]}")
-                elif resp.status_code == 503:
-                    try:
-                        err = resp.json()
-                        wait = min(int(err.get("estimated_time", 20)) + 1, 60)
-                    except Exception:
-                        wait = 20
-                    print(f"[PresentAI] Model loading, waiting {wait}s...")
-                    if attempt < 2:
-                        time.sleep(wait)
-                        continue
-                else:
-                    print(f"[PresentAI] Image API error {resp.status_code}: {resp.text[:200]}")
-                    if resp.status_code in (401, 403):
-                        print("[PresentAI] Auth error — check HF_API_KEY in .env")
-                        return None
-                    break  # Try next URL
-            except requests.exceptions.Timeout:
-                print(f"[PresentAI] Image request timed out (attempt {attempt + 1})")
+                print(f"[PresentAI] Image attempt {attempt + 1} via {model}...")
+                image = client.text_to_image(
+                    enhanced,
+                    model=model,
+                    width=img_w,
+                    height=img_h,
+                )
+                buf = BytesIO()
+                image.save(buf, format="PNG")
+                buf.seek(0)
+                print(f"[PresentAI] Image generated ({buf.getbuffer().nbytes} bytes) via {model}")
+                return buf
+            except HfHubHTTPError as e:
+                status = getattr(e.response, "status_code", None)
+                body = getattr(e.response, "text", "")[:200]
+                print(f"[PresentAI] Image API error {status} on {model}: {body}")
+                if status in (401, 403):
+                    print("[PresentAI] Auth error — HF_API_KEY must be a token with "
+                          "the 'Make calls to Inference Providers' permission")
+                    return None
+                if status == 402:
+                    print("[PresentAI] Out of Inference Providers credits — add credits at "
+                          "https://huggingface.co/settings/billing")
+                    return None
+                if status == 503 and attempt == 0:
+                    time.sleep(15)
+                    continue
+                break  # try next model
             except Exception as e:
-                print(f"[PresentAI] Image error: {e}")
-        # If this URL failed all attempts, try next URL
+                print(f"[PresentAI] Image error on {model}: {type(e).__name__}: {e}")
+
     print("[PresentAI] All image generation attempts failed")
     return None
 
