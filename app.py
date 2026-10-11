@@ -13,6 +13,7 @@ from pptx.enum.text import PP_ALIGN
 from io import BytesIO
 from datetime import date
 import re
+import math
 import json
 import traceback
 from functools import wraps
@@ -61,6 +62,58 @@ google = oauth.register(
 _db = None
 _cursor = None
 
+_schema_checked = False
+
+
+def ensure_schema(db, cursor):
+    """Make sure `presentations` exists and can actually hold a deck.
+
+    A .pptx with four generated images runs to several megabytes. MySQL's
+    plain BLOB caps at 65,535 bytes, so on a BLOB column every insert either
+    errors (strict mode) or silently truncates — in both cases the user's
+    presentation never shows up in history. Widen it to LONGBLOB once at
+    startup; both statements are no-ops when the schema is already correct.
+    """
+    global _schema_checked
+    if _schema_checked:
+        return
+    try:
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS presentations (
+                id         INT AUTO_INCREMENT PRIMARY KEY,
+                user_email VARCHAR(255) NOT NULL,
+                title      VARCHAR(512),
+                filename   VARCHAR(512),
+                file_data  LONGBLOB,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                INDEX idx_user_email (user_email)
+            )
+            """
+        )
+
+        cursor.execute(
+            """
+            SELECT DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'presentations'
+              AND COLUMN_NAME = 'file_data'
+            """
+        )
+        row = cursor.fetchone()
+        current = (row[0] or "").lower() if row else ""
+        if current and current != "longblob":
+            print(f"[PresentAI] Migrating presentations.file_data {current} -> longblob")
+            cursor.execute("ALTER TABLE presentations MODIFY file_data LONGBLOB")
+
+        db.commit()
+        _schema_checked = True
+        print(f"[PresentAI] Schema OK (file_data={current or 'longblob'})")
+    except Exception as e:
+        # Never block a request on migration trouble — just make it loud.
+        print(f"[PresentAI] Schema check failed: {type(e).__name__}: {e}")
+
+
 def get_db():
     global _db, _cursor
 
@@ -74,6 +127,7 @@ def get_db():
                 database=os.getenv("MYSQLDATABASE"),
             )
             _cursor = _db.cursor()
+            ensure_schema(_db, _cursor)
             return _db, _cursor
         except Exception as e:
             print("[Railway MySQL Error]", e)
@@ -862,10 +916,16 @@ def generate_image(prompt, img_w=1024, img_h=1024):
                     width=img_w,
                     height=img_h,
                 )
+                # JPEG, not PNG. These are photographic AI renders placed as
+                # opaque blocks — PNG keeps them at 1.5-2.5MB each, and four of
+                # those push a deck past 8MB. JPEG q88 is visually equivalent
+                # here at roughly a tenth the size.
+                if image.mode != "RGB":
+                    image = image.convert("RGB")
                 buf = BytesIO()
-                image.save(buf, format="PNG")
+                image.save(buf, format="JPEG", quality=88, optimize=True, progressive=True)
                 buf.seek(0)
-                print(f"[PresentAI] Image generated ({buf.getbuffer().nbytes} bytes) via {model}")
+                print(f"[PresentAI] Image generated ({buf.getbuffer().nbytes // 1024} KB) via {model}")
                 return buf
             except HfHubHTTPError as e:
                 status = getattr(e.response, "status_code", None)
@@ -970,7 +1030,15 @@ def add_square_image(slide, image_bytes, left, top, size=IMG_SZ):
 
 
 def add_bullet_text(slide, left, top, width, height, bullets,
-                    bullet_color=None, font_size=13, text_color=None):
+                    bullet_color=None, font_size=13, text_color=None,
+                    shrink=True):
+    # Long model output used to run straight off the bottom of the slide.
+    # Step the size down until it fits the box it was given.
+    if shrink and bullets:
+        avail = height / 914400.0 if hasattr(height, "__int__") else float(height)
+        fitted = fit_font_size(bullets, width / 914400.0, avail,
+                               start_pt=font_size)
+        font_size = min(font_size, fitted)
     box = slide.shapes.add_textbox(left, top, width, height)
     tf = box.text_frame
     tf.clear()
@@ -997,6 +1065,79 @@ def add_bullet_text(slide, left, top, width, height, bullets,
         rt.font.color.rgb = t_color
 
 
+# ---------------- Content-aware sizing ----------------
+# Cards used to take a fixed height regardless of what went in them, so three
+# short bullets sat in a 4.5" box with three inches of dead white below. These
+# helpers estimate the height a block of text actually needs, letting each
+# layout size its cards to the content and then centre the row on the canvas.
+
+CANVAS_TOP = CT                 # first usable y below the section title
+CANVAS_BOTTOM = SH - 0.70       # keep clear of the slide number
+CANVAS_H = CANVAS_BOTTOM - CANVAS_TOP
+
+BODY_PT = 14                    # was 13 — too small to read on a projector
+CARD_TITLE_PT = 19
+
+
+def _lines_needed(text, width_in, font_pt):
+    """Rough wrapped-line count. Average glyph ~0.5em, so 144/pt chars per inch."""
+    usable = max(width_in, 0.5)
+    chars_per_line = max(int(usable * 144.0 / font_pt), 8)
+    return max(1, math.ceil(len(str(text)) / chars_per_line))
+
+
+def measure_bullets(bullets, width_in, font_pt=BODY_PT):
+    """Height in inches that add_bullet_text will occupy."""
+    line_h = max(font_pt + 8, 20) / 72.0
+    space_before = 5 / 72.0
+    total = 0.20                                  # text-frame top + bottom margin
+    for b in bullets:
+        total += space_before + _lines_needed(b, width_in - 0.30, font_pt) * line_h
+    return total
+
+
+def fit_font_size(bullets, width_in, height_in, start_pt=BODY_PT, min_pt=9):
+    """Largest size from start_pt down to min_pt whose text fits height_in."""
+    for pt in range(int(start_pt), int(min_pt) - 1, -1):
+        if measure_bullets(bullets, width_in, pt) <= height_in:
+            return pt
+    return min_pt
+
+
+def measure_card(title, bullets, width_in,
+                 title_pt=CARD_TITLE_PT, body_pt=BODY_PT):
+    """Height a card needs to fit its title and bullets without clipping."""
+    head = 0.15 + _lines_needed(title, width_in - 0.40, title_pt) * (title_pt + 10) / 72.0
+    body = measure_bullets(bullets, width_in - 0.30, body_pt)
+    return head + body + 0.25
+
+
+def fit_row(cards, width_in, min_h=1.6, max_h=None, title_pt=CARD_TITLE_PT,
+            body_pt=BODY_PT):
+    """Uniform height for a row of cards: tall enough for the fullest one."""
+    if max_h is None:
+        max_h = CANVAS_H
+    needed = max(
+        (measure_card(c.get("title", ""), c.get("bullets", []), width_in,
+                      title_pt, body_pt) for c in cards),
+        default=min_h,
+    )
+    return max(min_h, min(needed, max_h))
+
+
+def centre_top(block_h, top=None, bottom=None, bias=0.32):
+    """y for a block of block_h, biased toward the top of the canvas.
+
+    A true centre (bias 0.5) pushes short content into the middle of the slide
+    and visually divorces it from the section title above. Taking roughly a
+    third of the slack keeps the block tied to its heading while still leaving
+    a margin at the foot.
+    """
+    top = CANVAS_TOP if top is None else top
+    bottom = CANVAS_BOTTOM if bottom is None else bottom
+    return max(top, top + (bottom - top - block_h) * bias)
+
+
 def add_card(slide, left, top, width, height, bg_color=None, accent_color=None):
     """Rounded card with optional colored accent bar at top edge."""
     card = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, left, top, width, height)
@@ -1020,21 +1161,24 @@ def add_card_with_bullets(slide, left, top, width, height, title, bullets,
                           title_color=None, bullet_color=None):
     add_card(slide, left, top, width, height, bg_color, accent_color)
     tbox = slide.shapes.add_textbox(left + Inches(0.20), top + Inches(0.15),
-                                    width - Inches(0.40), Inches(0.50))
+                                    width - Inches(0.40), Inches(0.52))
     tf = tbox.text_frame
     tf.clear()
     tf.word_wrap = True
     p = tf.paragraphs[0]
     r = p.add_run()
     r.text = title
-    r.font.size = Pt(18)
+    # Drop a step or two rather than let a long heading spill into the body.
+    t_lines = _lines_needed(title, (width / 914400.0) - 0.40, CARD_TITLE_PT)
+    r.font.size = Pt(CARD_TITLE_PT if t_lines <= 1
+                     else (16 if t_lines == 2 else 14))
     r.font.bold = True
     r.font.color.rgb = title_color or CHARCOAL
-    add_bullet_text(slide, left + Inches(0.15), top + Inches(0.60),
-                    width - Inches(0.30), height - Inches(0.70),
+    add_bullet_text(slide, left + Inches(0.15), top + Inches(0.62),
+                    width - Inches(0.30), height - Inches(0.72),
                     bullets,
                     bullet_color=bullet_color or accent_color or ROYAL_BLUE,
-                    font_size=13)
+                    font_size=BODY_PT)
 
 
 def add_side_image(slide, image_bytes, side="left", width=SIDE_W, height=SIDE_H):
@@ -1145,11 +1289,27 @@ def slide_2a_dot_badge_rows(prs, data):
     add_section_title(slide, data["title"])
     cards = data["cards"][:3]
     n = len(cards)
-    row_h = 1.55
-    row_gap = 0.20
+    row_gap = 0.26
+    # Each row is as tall as its own content rather than a flat 1.55", and the
+    # stack is centred so short decks don't trail off into empty space.
+    row_hs = [
+        0.42 + measure_bullets(c.get("bullets", []), CW - 0.28, BODY_PT)
+        for c in cards
+    ]
+    total_h = sum(row_hs) + row_gap * max(n - 1, 0)
+    # With verbose bullets the measured stack can exceed the canvas; scale the
+    # rows back proportionally and let add_bullet_text shrink the text to suit.
+    avail = CANVAS_H - row_gap * max(n - 1, 0)
+    if sum(row_hs) > avail:
+        k = avail / sum(row_hs)
+        row_hs = [h * k for h in row_hs]
+        total_h = sum(row_hs) + row_gap * max(n - 1, 0)
+    y_cursor = centre_top(total_h)
     colors = [ROYAL_BLUE, WARM_CORAL, TEAL]
     for i, c in enumerate(cards):
-        y = CT + i * (row_h + row_gap)
+        row_h = row_hs[i]
+        y = y_cursor
+        y_cursor += row_h + row_gap
         color = colors[i % 3]
         # Dot badge
         add_dot_badge(slide, Inches(MG + 0.02), Inches(y + 0.07), color)
@@ -1162,13 +1322,13 @@ def slide_2a_dot_badge_rows(prs, data):
         hp = hf.paragraphs[0]
         hr = hp.add_run()
         hr.text = c["title"]
-        hr.font.size = Pt(18)
+        hr.font.size = Pt(CARD_TITLE_PT)
         hr.font.bold = True
         hr.font.color.rgb = CHARCOAL
         # Bullets
         add_bullet_text(slide, Inches(MG + 0.28), Inches(y + 0.42),
-                        Inches(CW - 0.28), Inches(row_h - 0.45),
-                        c["bullets"], bullet_color=color, font_size=13)
+                        Inches(CW - 0.28), Inches(max(row_h - 0.42, 0.3)),
+                        c["bullets"], bullet_color=color, font_size=BODY_PT)
     add_slide_number(slide, 2, TOTAL_SLIDES)
 
 
@@ -1213,12 +1373,13 @@ def slide_3a_three_cards_row(prs, data):
     cards = data["cards"][:3]
     n = len(cards)
     card_w = (CW - (n - 1) * GAP) / n
-    card_h = 5.00
+    card_h = fit_row(cards, card_w, min_h=2.4)
+    card_y = centre_top(card_h)
     colors = [ROYAL_BLUE, WARM_CORAL, TEAL]
     fills = [WHITE, WHITE, WHITE]
     for i, c in enumerate(cards):
         x = MG + i * (card_w + GAP)
-        add_card_with_bullets(slide, Inches(x), Inches(CT),
+        add_card_with_bullets(slide, Inches(x), Inches(card_y),
                               Inches(card_w), Inches(card_h),
                               c["title"], c["bullets"],
                               bg_color=fills[i], accent_color=colors[i % 3])
@@ -1232,12 +1393,13 @@ def slide_3b_four_cards_row(prs, data):
     cards = data["cards"][:4]
     n = min(len(cards), 4)
     card_w = (CW - (n - 1) * GAP) / n
-    card_h = 5.00
+    card_h = fit_row(cards[:n], card_w, min_h=2.4)
+    card_y = centre_top(card_h)
     colors = [ROYAL_BLUE, WARM_CORAL, TEAL, ROYAL_BLUE]
     fills = [LIGHT_BLUE_TINT, LIGHT_CORAL_TINT, LIGHT_BLUE_TINT, LIGHT_CORAL_TINT]
     for i, c in enumerate(cards[:n]):
         x = MG + i * (card_w + GAP)
-        add_card_with_bullets(slide, Inches(x), Inches(CT),
+        add_card_with_bullets(slide, Inches(x), Inches(card_y),
                               Inches(card_w), Inches(card_h),
                               c["title"], c["bullets"],
                               bg_color=fills[i], accent_color=colors[i % 4])
@@ -1250,8 +1412,10 @@ def slide_4a_image_left_bullets(prs, data, image_bytes=None):
     add_section_title(slide, data["title"])
     add_square_image(slide, image_bytes, MG, CT)
     txt_x = MG + IMG_SZ + GAP
-    add_bullet_text(slide, Inches(txt_x), Inches(CT),
-                    Inches(TXT_BW), Inches(5.00),
+    bl_h = measure_bullets(data["bullets"], TXT_BW, 15)
+    bl_y = centre_top(bl_h, top=CT, bottom=CT + IMG_SZ, bias=0.5)
+    add_bullet_text(slide, Inches(txt_x), Inches(bl_y),
+                    Inches(TXT_BW), Inches(min(bl_h + 0.2, CT + IMG_SZ - bl_y)),
                     data["bullets"], bullet_color=WARM_CORAL, font_size=15)
     add_slide_number(slide, 4, TOTAL_SLIDES)
 
@@ -1261,8 +1425,10 @@ def slide_4b_bullets_image_right(prs, data, image_bytes=None):
     slide = _new_slide(prs)
     add_section_title(slide, data["title"])
     add_square_image(slide, image_bytes, IMG_RX, IMG_TOP)
-    add_bullet_text(slide, Inches(MG), Inches(CT),
-                    Inches(TXT_BW), Inches(5.00),
+    bl_h = measure_bullets(data["bullets"], TXT_BW, 15)
+    bl_y = centre_top(bl_h, top=CT, bottom=IMG_TOP + IMG_SZ, bias=0.5)
+    add_bullet_text(slide, Inches(MG), Inches(bl_y),
+                    Inches(TXT_BW), Inches(min(bl_h + 0.2, IMG_TOP + IMG_SZ - bl_y)),
                     data["bullets"], bullet_color=WARM_CORAL, font_size=15)
     add_slide_number(slide, 4, TOTAL_SLIDES)
 
@@ -1274,12 +1440,14 @@ def slide_5a_grid_badges(prs, data):
     cards = data["cards"][:4]
     card_w = (CW - GAP) / 2
     v_gap = 0.24
-    card_h = (5.00 - v_gap) / 2
+    # Badge sits top-right inside the card, so reserve a little title room.
+    card_h = fit_row(cards, card_w - 0.55, min_h=1.5, max_h=(CANVAS_H - v_gap) / 2)
+    grid_y = centre_top(card_h * 2 + v_gap)
     positions = [
-        (MG, CT),
-        (MG + card_w + GAP, CT),
-        (MG, CT + card_h + v_gap),
-        (MG + card_w + GAP, CT + card_h + v_gap),
+        (MG, grid_y),
+        (MG + card_w + GAP, grid_y),
+        (MG, grid_y + card_h + v_gap),
+        (MG + card_w + GAP, grid_y + card_h + v_gap),
     ]
     accent_colors = [TEAL, TEAL, TEAL, TEAL]
     fills = [WHITE, LIGHT_BLUE_TINT, LIGHT_BLUE_TINT, WHITE]
@@ -1312,17 +1480,24 @@ def slide_5b_stat_columns(prs, data):
     cards = data["cards"][:4]
     n = len(cards)
     card_w = (CW - (n - 1) * GAP) / n
-    card_h = 5.00
+    # Figure + rule + caption, sized to the longest caption in the row.
+    head_h = 1.15
+    cap_h = max(
+        (measure_bullets(c.get("bullets", []), card_w - 0.20, 12) for c in cards),
+        default=0.5,
+    )
+    card_h = min(max(head_h + cap_h + 0.25, 2.0), CANVAS_H)
+    card_y = centre_top(card_h)
     colors = [ROYAL_BLUE, WARM_CORAL, TEAL, ROYAL_BLUE]
     for i, c in enumerate(cards):
         x = MG + i * (card_w + GAP)
         color = colors[i % 4]
-        add_card(slide, Inches(x), Inches(CT),
+        add_card(slide, Inches(x), Inches(card_y),
                  Inches(card_w), Inches(card_h),
                  bg_color=WHITE, accent_color=color)
         title_text = c["title"]
         title_sz = 20 if len(title_text) <= 25 else 16
-        nbox = slide.shapes.add_textbox(Inches(x + 0.15), Inches(CT + 0.20),
+        nbox = slide.shapes.add_textbox(Inches(x + 0.15), Inches(card_y + 0.20),
                                          Inches(card_w - 0.30), Inches(0.65))
         nf = nbox.text_frame
         nf.clear()
@@ -1335,11 +1510,12 @@ def slide_5b_stat_columns(prs, data):
         nr.font.bold = True
         nr.font.color.rgb = color
         line_w = min(0.8, card_w * 0.35)
-        line_y = CT + 0.95
+        line_y = card_y + 0.95
         add_accent_line(slide, Inches(x + (card_w - line_w) / 2),
                         Inches(line_y), Inches(line_w), color)
         add_bullet_text(slide, Inches(x + 0.10), Inches(line_y + 0.18),
-                        Inches(card_w - 0.20), Inches(card_h - (line_y - CT) - 0.33),
+                        Inches(card_w - 0.20),
+                        Inches(max(card_h - (line_y - card_y) - 0.25, 0.3)),
                         c["bullets"],
                         bullet_color=color, font_size=12)
     add_slide_number(slide, 5, TOTAL_SLIDES)
@@ -1357,11 +1533,17 @@ def slide_6a_bullets_banner(prs, data, image_bytes=None):
     # Bullets beside image
     txt_x = MG + img_sz + GAP
     txt_w = SW - txt_x - MG
-    bullet_h = banner_top - CT - 0.20
-    add_bullet_text(slide, Inches(txt_x), Inches(CT),
-                    Inches(txt_w), Inches(bullet_h),
+    bl_h = measure_bullets(data["bullets"], txt_w, 15)
+    bl_y = centre_top(bl_h, top=CT, bottom=CT + img_sz, bias=0.5)
+    add_bullet_text(slide, Inches(txt_x), Inches(bl_y),
+                    Inches(txt_w), Inches(min(bl_h + 0.2, CT + img_sz - bl_y)),
                     data["bullets"], bullet_color=ROYAL_BLUE, font_size=15)
     # Dark stat banner
+    # No figure from the model means no banner — an empty navy bar across the
+    # foot of the slide looks like a rendering fault.
+    if not data.get("stat_number"):
+        add_slide_number(slide, 6, TOTAL_SLIDES)
+        return
     banner = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE,
                                     Inches(0), Inches(banner_top),
                                     Inches(SW), Inches(banner_h))
@@ -1391,8 +1573,10 @@ def slide_6b_cards_banner(prs, data, image_bytes=None):
     """Slide 6B - Image right + stacked cards left + dark stat banner at bottom."""
     slide = _new_slide(prs)
     add_section_title(slide, data["title"])
-    banner_h = 1.10
-    banner_top = SH - banner_h
+    # Without a figure the banner is just an empty navy strip, so reclaim it.
+    has_stat = bool(data.get("stat_number"))
+    banner_h = 1.10 if has_stat else 0.0
+    banner_top = SH - banner_h if has_stat else CANVAS_BOTTOM
     # Image on right
     img_sz = 4.50
     add_square_image(slide, image_bytes, IMG_RX, IMG_TOP, size=img_sz)
@@ -1416,15 +1600,20 @@ def slide_6b_cards_banner(prs, data, image_bytes=None):
         ttf.word_wrap = True
         tp = ttf.paragraphs[0]
         rb = tp.add_run()
+        row_pt = fit_font_size([bullet], card_w - 0.30,
+                               max(card_h - 0.18, 0.3), start_pt=15, min_pt=10)
         rb.text = "  \u2022  "
-        rb.font.size = Pt(15)
+        rb.font.size = Pt(row_pt)
         rb.font.bold = True
         rb.font.color.rgb = colors[i % 5]
         rt = tp.add_run()
         rt.text = bullet
-        rt.font.size = Pt(15)
+        rt.font.size = Pt(row_pt)
         rt.font.color.rgb = SLATE
     # Dark stat banner
+    if not has_stat:
+        add_slide_number(slide, 6, TOTAL_SLIDES)
+        return
     banner = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE,
                                     Inches(0), Inches(banner_top),
                                     Inches(SW), Inches(banner_h))
@@ -1455,13 +1644,14 @@ def slide_7a_two_cards(prs, data):
     slide = _new_slide(prs)
     add_section_title(slide, data["title"])
     card_w = (CW - GAP) / 2
-    card_h = 5.00
-    add_card_with_bullets(slide, Inches(MG), Inches(CT),
+    card_h = fit_row([data["left"], data["right"]], card_w, min_h=2.6)
+    card_y = centre_top(card_h)
+    add_card_with_bullets(slide, Inches(MG), Inches(card_y),
                           Inches(card_w), Inches(card_h),
                           data["left"]["title"], data["left"]["bullets"],
                           bg_color=LIGHT_BLUE_TINT, accent_color=ROYAL_BLUE,
                           bullet_color=ROYAL_BLUE)
-    add_card_with_bullets(slide, Inches(MG + card_w + GAP), Inches(CT),
+    add_card_with_bullets(slide, Inches(MG + card_w + GAP), Inches(card_y),
                           Inches(card_w), Inches(card_h),
                           data["right"]["title"], data["right"]["bullets"],
                           bg_color=LIGHT_CORAL_TINT, accent_color=WARM_CORAL,
@@ -1476,10 +1666,31 @@ def slide_7b_grid_table(prs, data):
     left_data = data["left"]
     right_data = data["right"]
     card_w = (CW - GAP) / 2
-    card_h = 5.00
+
+    # Row heights come from the text: a single 5.00" card divided by bullet
+    # count gave 1" tall rows for one line of text. Measure both columns and
+    # use one shared rhythm so the two cards stay aligned.
+    bullets_l = left_data["bullets"]
+    bullets_r = right_data["bullets"]
+    rows = max(len(bullets_l), len(bullets_r), 1)
+    row_lines = max(
+        (_lines_needed(b, card_w - 0.75, BODY_PT)
+         for b in (bullets_l + bullets_r)), default=1
+    )
+    row_h = max(0.52, row_lines * (BODY_PT + 8) / 72.0 + 0.22)
+    head_h = 0.95
+    # Clamping only card_h let the rows themselves march off the slide, so
+    # squeeze the row pitch too when the content is taller than the canvas.
+    max_rows_h = CANVAS_H - head_h - 0.20
+    if rows * row_h > max_rows_h:
+        row_h = max_rows_h / rows
+    card_h = min(head_h + rows * row_h + 0.20, CANVAS_H)
+    card_y = centre_top(card_h)
+    row_start = card_y + head_h
+
     # Left card - tinted fill
     left_card = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE,
-                                        Inches(MG), Inches(CT),
+                                        Inches(MG), Inches(card_y),
                                         Inches(card_w), Inches(card_h))
     left_card.fill.solid()
     left_card.fill.fore_color.rgb = LIGHT_BLUE_TINT
@@ -1487,7 +1698,7 @@ def slide_7b_grid_table(prs, data):
     left_card.line.width = Pt(0.75)
     left_card.adjustments[0] = CARD_RADIUS
     # Left title
-    ltbox = slide.shapes.add_textbox(Inches(MG + 0.25), Inches(CT + 0.20),
+    ltbox = slide.shapes.add_textbox(Inches(MG + 0.25), Inches(card_y + 0.22),
                                       Inches(card_w - 0.50), Inches(0.50))
     ltf = ltbox.text_frame
     ltf.clear()
@@ -1495,13 +1706,10 @@ def slide_7b_grid_table(prs, data):
     lp = ltf.paragraphs[0]
     lr = lp.add_run()
     lr.text = left_data["title"]
-    lr.font.size = Pt(18)
+    lr.font.size = Pt(CARD_TITLE_PT)
     lr.font.bold = True
     lr.font.color.rgb = ROYAL_BLUE
     # Left bullets as rows with dividers
-    bullets_l = left_data["bullets"]
-    row_start = CT + 0.80
-    row_h = (card_h - 1.00) / max(len(bullets_l), 1)
     for j, b in enumerate(bullets_l):
         y = row_start + j * row_h
         if j > 0:
@@ -1519,17 +1727,17 @@ def slide_7b_grid_table(prs, data):
         bp = bf.paragraphs[0]
         br1 = bp.add_run()
         br1.text = "  \u2022  "
-        br1.font.size = Pt(13)
+        br1.font.size = Pt(BODY_PT)
         br1.font.bold = True
         br1.font.color.rgb = ROYAL_BLUE
         br2 = bp.add_run()
         br2.text = b
-        br2.font.size = Pt(13)
+        br2.font.size = Pt(BODY_PT)
         br2.font.color.rgb = SLATE
     # Right card - different tint
     rx = MG + card_w + GAP
     right_card = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE,
-                                         Inches(rx), Inches(CT),
+                                         Inches(rx), Inches(card_y),
                                          Inches(card_w), Inches(card_h))
     right_card.fill.solid()
     right_card.fill.fore_color.rgb = LIGHT_CORAL_TINT
@@ -1537,7 +1745,7 @@ def slide_7b_grid_table(prs, data):
     right_card.line.width = Pt(0.75)
     right_card.adjustments[0] = CARD_RADIUS
     # Right title
-    rtbox = slide.shapes.add_textbox(Inches(rx + 0.25), Inches(CT + 0.20),
+    rtbox = slide.shapes.add_textbox(Inches(rx + 0.25), Inches(card_y + 0.22),
                                       Inches(card_w - 0.50), Inches(0.50))
     rtf = rtbox.text_frame
     rtf.clear()
@@ -1545,11 +1753,10 @@ def slide_7b_grid_table(prs, data):
     rp = rtf.paragraphs[0]
     rr = rp.add_run()
     rr.text = right_data["title"]
-    rr.font.size = Pt(18)
+    rr.font.size = Pt(CARD_TITLE_PT)
     rr.font.bold = True
     rr.font.color.rgb = WARM_CORAL
     # Right bullets as rows with dividers
-    bullets_r = right_data["bullets"]
     for j, b in enumerate(bullets_r):
         y = row_start + j * row_h
         if j > 0:
@@ -1567,12 +1774,12 @@ def slide_7b_grid_table(prs, data):
         bp = bf.paragraphs[0]
         br1 = bp.add_run()
         br1.text = "  \u2022  "
-        br1.font.size = Pt(13)
+        br1.font.size = Pt(BODY_PT)
         br1.font.bold = True
         br1.font.color.rgb = WARM_CORAL
         br2 = bp.add_run()
         br2.text = b
-        br2.font.size = Pt(13)
+        br2.font.size = Pt(BODY_PT)
         br2.font.color.rgb = SLATE
     add_slide_number(slide, 7, TOTAL_SLIDES)
 
@@ -1584,7 +1791,14 @@ def slide_8a_timeline(prs, data):
     steps = data["steps"][:4]
     n = len(steps)
     step_w = CW / n
-    line_y = 2.87
+    # Centre the whole timeline block instead of pinning it to a fixed y and
+    # leaving the bottom half of the slide empty.
+    cap_lines = max(
+        (_lines_needed(b, step_w - 0.4, 12)
+         for st in steps for b in st.get("bullets", [])), default=1
+    )
+    block_h = 0.50 + 0.53 + 0.30 + cap_lines * 0.24
+    line_y = centre_top(block_h) + 0.50
     conn = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE,
                                   Inches(MG + 0.40), Inches(line_y),
                                   Inches(CW - 0.80), Inches(0.06))
@@ -1606,8 +1820,8 @@ def slide_8a_timeline(prs, data):
         cr.font.size = Pt(16)
         cr.font.bold = True
         cr.font.color.rgb = WHITE
-        tbox = slide.shapes.add_textbox(Inches(col_left), Inches(3.40),
-                                        Inches(step_w), Inches(0.50))
+        tbox = slide.shapes.add_textbox(Inches(col_left), Inches(line_y + 0.53),
+                                        Inches(step_w), Inches(0.42))
         ttf = tbox.text_frame
         ttf.clear()
         ttf.word_wrap = True
@@ -1615,13 +1829,26 @@ def slide_8a_timeline(prs, data):
         tp.alignment = PP_ALIGN.CENTER
         tr = tp.add_run()
         tr.text = step["title"]
-        tr.font.size = Pt(14)
+        tr.font.size = Pt(15)
         tr.font.bold = True
         tr.font.color.rgb = CHARCOAL
-        add_bullet_text(slide, Inches(col_left), Inches(4.00),
-                        Inches(step_w), Inches(2.80),
-                        step["bullets"], bullet_color=colors[i % 4],
-                        font_size=12)
+
+        # Centred caption under each node. A left-aligned bullet glyph inside a
+        # centred column read as a misalignment, so the dot is dropped here.
+        cbox = slide.shapes.add_textbox(Inches(col_left + 0.12),
+                                        Inches(line_y + 1.00),
+                                        Inches(step_w - 0.24), Inches(1.40))
+        cf = cbox.text_frame
+        cf.clear()
+        cf.word_wrap = True
+        for k, b in enumerate(step.get("bullets", [])[:2]):
+            cp2 = cf.paragraphs[0] if k == 0 else cf.add_paragraph()
+            cp2.alignment = PP_ALIGN.CENTER
+            cp2.space_before = Pt(3)
+            cr2 = cp2.add_run()
+            cr2.text = b
+            cr2.font.size = Pt(12)
+            cr2.font.color.rgb = SLATE
     add_slide_number(slide, 8, TOTAL_SLIDES)
 
 
@@ -1681,25 +1908,37 @@ def slide_9a_stat_image(prs, data, image_bytes=None):
     add_section_title(slide, data["title"])
     add_square_image(slide, image_bytes, IMG_RX, IMG_TOP)
     text_w = TXT_BW
-    sbox = slide.shapes.add_textbox(Inches(MG), Inches(CT),
-                                    Inches(text_w), Inches(1.50))
-    stf = sbox.text_frame
-    stf.clear()
-    stf.word_wrap = True
-    sp = stf.paragraphs[0]
-    sr = sp.add_run()
-    sr.text = data.get("stat_number", "")
-    sr.font.size = Pt(64)
-    sr.font.bold = True
-    sr.font.color.rgb = WARM_CORAL
-    sp2 = stf.add_paragraph()
-    sr2 = sp2.add_run()
-    sr2.text = data.get("stat_label", "")
-    sr2.font.size = Pt(18)
-    sr2.font.color.rgb = SLATE
-    add_bullet_text(slide, Inches(MG), Inches(CT + 2.20),
-                    Inches(text_w), Inches(2.80),
-                    data["bullets"], bullet_color=TEAL, font_size=14)
+    stat = data.get("stat_number", "")
+    bullets_top = CT
+    if stat:
+        sbox = slide.shapes.add_textbox(Inches(MG), Inches(CT),
+                                        Inches(text_w), Inches(1.50))
+        stf = sbox.text_frame
+        stf.clear()
+        stf.word_wrap = True
+        sp = stf.paragraphs[0]
+        sr = sp.add_run()
+        sr.text = stat
+        sr.font.size = Pt(64)
+        sr.font.bold = True
+        sr.font.color.rgb = WARM_CORAL
+        label = data.get("stat_label", "")
+        if label:
+            sp2 = stf.add_paragraph()
+            sr2 = sp2.add_run()
+            sr2.text = label
+            sr2.font.size = Pt(18)
+            sr2.font.color.rgb = SLATE
+        bullets_top = CT + 2.20
+
+    bullets = data["bullets"]
+    bl_h = measure_bullets(bullets, text_w, BODY_PT)
+    if not stat:
+        # Centre the bullets against the square image when the figure is absent.
+        bullets_top = centre_top(bl_h, top=CT, bottom=IMG_TOP + IMG_SZ)
+    add_bullet_text(slide, Inches(MG), Inches(bullets_top),
+                    Inches(text_w), Inches(min(bl_h + 0.2, CANVAS_BOTTOM - bullets_top)),
+                    bullets, bullet_color=TEAL, font_size=BODY_PT)
     add_slide_number(slide, 9, TOTAL_SLIDES)
 
 
@@ -1709,7 +1948,11 @@ def slide_9b_quote_image(prs, data, image_bytes=None):
     add_section_title(slide, data["title"])
     add_square_image(slide, image_bytes, IMG_RX, IMG_TOP)
     text_w = TXT_BW
-    quote = f"{data.get('stat_number', '')} {data.get('stat_label', '')}"
+    quote = (data.get("quote") or "").strip()
+    if not quote:
+        quote = " ".join(
+            x for x in (data.get("stat_number", ""), data.get("stat_label", "")) if x
+        ).strip()
     line = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE,
                                    Inches(MG), Inches(CT + 0.10),
                                    Pt(5), Inches(1.80))
@@ -1753,10 +1996,24 @@ def slide_10_closing_cta(prs, data):
     div_w = 3.00
     add_accent_line(slide, Inches((SW - div_w) / 2), Inches(1.85),
                     Inches(div_w), WARM_CORAL)
-    card_w = (CW - 2 * GAP) / 3
-    card_top = 2.30
-    card_h = 4.50
-    for i, c in enumerate(data["cards"][:3]):
+
+    # The closing slide only knew how to draw `cards`. When the model returned
+    # bullets instead — which it often does for a call-to-action — the slide
+    # rendered completely blank. Fall back to the bullets before giving up.
+    cards = [c for c in data.get("cards", []) if c.get("title") or c.get("bullets")][:3]
+    if not cards:
+        bullets = [b for b in data.get("bullets", []) if str(b).strip()][:3]
+        cards = [{"title": "", "bullets": [b]} for b in bullets]
+    if not cards:
+        add_slide_number(slide, 10, TOTAL_SLIDES)
+        return
+
+    n = len(cards)
+    card_w = (CW - (n - 1) * GAP) / n
+    card_top = 2.45
+    card_h = fit_row(cards, card_w, min_h=1.7,
+                     max_h=CANVAS_BOTTOM - card_top)
+    for i, c in enumerate(cards):
         x = MG + i * (card_w + GAP)
         add_card_with_bullets(slide, Inches(x), Inches(card_top),
                               Inches(card_w), Inches(card_h),
@@ -1790,7 +2047,7 @@ def _get_default_slide(slide_num, topic):
             {"title": "99%", "bullets": ["Success rate"]},
             {"title": "24/7", "bullets": ["Availability"]}
         ]},
-        6: {"title": "Analysis", "image_prompt": "", "stat_number": "100%", "stat_label": "Key metric", "bullets": ["Point 1", "Point 2", "Point 3"], "cards": [
+        6: {"title": "Analysis", "image_prompt": "", "stat_number": "", "stat_label": "", "bullets": ["Point 1", "Point 2", "Point 3"], "cards": [
             {"title": "Item 1", "bullets": ["Detail"]},
             {"title": "Item 2", "bullets": ["Detail"]}
         ]},
@@ -1808,7 +2065,7 @@ def _get_default_slide(slide_num, topic):
             {"title": "Step 3", "bullets": ["Detail 1", "Detail 2"]},
             {"title": "Step 4", "bullets": ["Detail 1", "Detail 2"]}
         ]},
-        9: {"title": "Key Insight", "image_prompt": "", "stat_number": "90%", "stat_label": "Success rate", "quote": "Key insight quote here", "bullets": ["Point 1", "Point 2", "Point 3", "Point 4"]},
+        9: {"title": "Key Insight", "image_prompt": "", "stat_number": "", "stat_label": "", "quote": "", "bullets": ["Point 1", "Point 2", "Point 3", "Point 4"]},
         10: {"title": "Take Action", "cards": [
             {"title": "Next Step 1", "bullets": ["Action item 1", "Action item 2", "Action item 3"]},
             {"title": "Next Step 2", "bullets": ["Action item 1", "Action item 2", "Action item 3"]},
@@ -1816,6 +2073,21 @@ def _get_default_slide(slide_num, topic):
         ]}
     }
     return defaults.get(slide_num, {"title": topic, "bullets": ["Content"], "cards": []})
+
+
+# The prompt asks for bullets under 60 characters. Models mostly comply, but
+# an occasional 200-character paragraph would cram the slide even after the
+# auto-shrink kicks in. Trim well above spec so normal output is untouched.
+BULLET_MAX = 140
+TITLE_MAX = 90
+
+
+def _clip(text, limit):
+    text = str(text).strip()
+    if len(text) <= limit:
+        return text
+    cut = text[:limit].rsplit(" ", 1)[0].rstrip(" ,;:.-")
+    return (cut or text[:limit]) + "\u2026"
 
 
 def _normalize_slide_data(slide_num, data, designs):
@@ -1884,21 +2156,38 @@ def _normalize_slide_data(slide_num, data, designs):
             normalized_steps.append(step)
         data["steps"] = normalized_steps
 
-    # Slide 9 specific: ensure stat fields and quote exist
-    if slide_num == 9:
-        if "stat_number" not in data:
-            data["stat_number"] = defaults.get("stat_number", "90%")
-        if "stat_label" not in data:
-            data["stat_label"] = defaults.get("stat_label", "Success rate")
-        if "quote" not in data:
-            data["quote"] = defaults.get("quote", "Key insight")
+    # Slides 6 and 9 show a headline figure. These used to be back-filled with
+    # "100% / Key metric" and "90% / Success rate" whenever the model left them
+    # out — inventing a statistic and printing it on the user's deck as fact.
+    # Leave them blank instead; the layouts omit the element when it's empty.
+    if slide_num in (6, 9):
+        data["stat_number"] = str(data.get("stat_number") or "").strip()
+        data["stat_label"] = str(data.get("stat_label") or "").strip()
+        # A label with no figure reads as a dangling caption.
+        if not data["stat_number"]:
+            data["stat_label"] = ""
 
-    # Slide 6 specific: ensure stat fields exist
-    if slide_num == 6:
-        if "stat_number" not in data:
-            data["stat_number"] = defaults.get("stat_number", "100%")
-        if "stat_label" not in data:
-            data["stat_label"] = defaults.get("stat_label", "Key metric")
+    if slide_num == 9 and "quote" not in data:
+        data["quote"] = ""
+
+    # Final guard: clip anything the model over-wrote.
+    if isinstance(data.get("title"), str):
+        data["title"] = _clip(data["title"], TITLE_MAX)
+    if isinstance(data.get("bullets"), list):
+        data["bullets"] = [_clip(b, BULLET_MAX) for b in data["bullets"]]
+    for key in ("cards", "steps"):
+        for item in data.get(key, []) or []:
+            if not isinstance(item, dict):
+                continue
+            item["title"] = _clip(item.get("title", ""), TITLE_MAX)
+            item["bullets"] = [_clip(b, BULLET_MAX)
+                               for b in item.get("bullets", []) or []]
+    for key in ("left", "right"):
+        col = data.get(key)
+        if isinstance(col, dict):
+            col["title"] = _clip(col.get("title", ""), TITLE_MAX)
+            col["bullets"] = [_clip(b, BULLET_MAX)
+                              for b in col.get("bullets", []) or []]
 
     return data
 
@@ -2005,17 +2294,50 @@ def generate_ppt():
 
         # Save to history using getvalue() (doesn't move the pointer)
         file_bytes = buf.getvalue()
+        size_mb = len(file_bytes) / (1024 * 1024)
+        user_email = session.get("email", "")
+
         try:
             db, cursor = get_db()
-            if db and cursor:
+            if not db or not cursor:
+                print("[PresentAI] History NOT saved: no database connection")
+            elif not user_email:
+                # Would insert an orphan row that /history can never find.
+                print("[PresentAI] History NOT saved: session has no email")
+            else:
                 cursor.execute(
                     "INSERT INTO presentations (user_email, title, filename, file_data) VALUES (%s, %s, %s, %s)",
-                    (session.get("email", ""), raw_title, f"{filename}.pptx", file_bytes),
+                    (user_email, raw_title, f"{filename}.pptx", file_bytes),
                 )
                 db.commit()
+                # Read back, so a silent truncation can't masquerade as success.
+                new_id = cursor.lastrowid
+                cursor.execute(
+                    "SELECT LENGTH(file_data) FROM presentations WHERE id=%s", (new_id,)
+                )
+                row = cursor.fetchone()
+                stored = row[0] if row else 0
+                if stored != len(file_bytes):
+                    print(
+                        f"[PresentAI] History TRUNCATED: wrote {len(file_bytes)} bytes, "
+                        f"stored {stored}. Widen presentations.file_data to LONGBLOB."
+                    )
+                else:
+                    print(
+                        f"[PresentAI] History saved: id={new_id} "
+                        f"user={user_email} size={size_mb:.2f}MB"
+                    )
         except Exception as db_err:
-            print(f"[PresentAI] History save failed (non-blocking): {db_err}")
-            pass  # Don't block download if history save fails
+            # Download still proceeds, but the failure is no longer invisible.
+            print(
+                f"[PresentAI] History save FAILED for {user_email} "
+                f"({size_mb:.2f}MB): {type(db_err).__name__}: {db_err}"
+            )
+            traceback.print_exc()
+            try:
+                db.rollback()
+            except Exception:
+                pass
 
         # Create a FRESH BytesIO from the saved bytes for send_file
         download_buf = BytesIO(file_bytes)
