@@ -3,1103 +3,410 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PresentAI - AI-Powered Presentations</title>
-    <style>
-
-        @import url(https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;700&display=swap*);
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
-
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        html {
-            scroll-behavior: smooth;
-        }
-
-        body {
-            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            line-height: 1.7;
-            color: #ffffff;
-            min-height: 100vh;
-            background: linear-gradient(
-                135deg,
-                #0f0f17 0%,
-                #1e1233 45%,
-                #191028 100%
-            );
-            overflow-x: hidden;
-        }
-
-        /* Animations */
-        @keyframes fadeInUp {
-            from { opacity: 0; transform: translateY(30px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        @keyframes fadeIn {
-            from { opacity: 0; }
-            to { opacity: 1; }
-        }
-
-        @keyframes slideInLeft {
-            from { opacity: 0; transform: translateX(-40px); }
-            to { opacity: 1; transform: translateX(0); }
-        }
-
-        @keyframes slideInRight {
-            from { opacity: 0; transform: translateX(40px); }
-            to { opacity: 1; transform: translateX(0); }
-        }
-
-        @keyframes scaleIn {
-            from { opacity: 0; transform: scale(0.9); }
-            to { opacity: 1; transform: scale(1); }
-        }
-
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.7; }
-        }
-
-        @keyframes shimmer {
-            0% { background-position: -200% 0; }
-            100% { background-position: 200% 0; }
-        }
-
-        @keyframes float {
-            0%, 100% { transform: translateY(0); }
-            50% { transform: translateY(-10px); }
-        }
-
-        .animate-on-scroll {
-            opacity: 0;
-            transform: translateY(30px);
-            transition: opacity 0.6s ease, transform 0.6s ease;
-        }
-
-        .animate-on-scroll.visible {
-            opacity: 1;
-            transform: translateY(0);
-        }
-
-        /* Header */
-        header {
-            position: fixed;
-            top: 0;
-            width: 100%;
-            background: rgba(15, 15, 25, 0.85);
-            backdrop-filter: blur(20px);
-            z-index: 1000;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-            animation: fadeIn 0.6s ease forwards;
-        }
-
-        nav {
-            max-width: 1400px;
-            margin: 0 auto;
-            padding: 20px 40px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .logo {
-            font-size: 28px;
-            font-weight: 700;
-            color: #a78bfa;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            cursor: pointer;
-        }
-
-        .nav-links {
-            display: flex;
-            gap: 40px;
-            list-style: none;
-            align-items: center;
-        }
-
-        .nav-links a {
-            text-decoration: none;
-            color: #9ca3af;
-            font-weight: 500;
-            font-size: 15px;
-            transition: all 0.3s;
-        }
-
-        .nav-links a:hover {
-            color: #a78bfa;
-        }
-
-        .nav-links a.active {
-            color: #a78bfa;
-        }
-
-        .hamburger {
-            display: none;
-            flex-direction: column;
-            gap: 5px;
-            cursor: pointer;
-            padding: 10px;
-        }
-
-        .hamburger span {
-            width: 25px;
-            height: 3px;
-            background: #a78bfa;
-            border-radius: 3px;
-            transition: all 0.3s;
-        }
-
-        /* Hero Section */
-        .hero {
-            margin-top: 80px;
-            padding: 120px 40px 80px;
-            text-align: center;
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-        }
-
-        .hero h1 {
-            font-size: 64px;
-            font-weight: 800;
-            color: #f4f4f5;
-            margin-bottom: 24px;
-            letter-spacing: -2px;
-            line-height: 1.1;
-            animation: fadeInUp 0.8s ease forwards;
-        }
-
-        .hero .gradient-text {
-            background: linear-gradient(135deg, #a78bfa, #8b5cf6, #c084fc);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-
-        .hero-subtitle {
-            font-size: 24px;
-            color: #9ca3af;
-            max-width: 700px;
-            margin: 0 auto 40px;
-            font-weight: 400;
-            animation: fadeInUp 0.8s ease 0.2s forwards;
-            opacity: 0;
-        }
-
-        /* Enhanced Form Styling */
-        .hero-form {
-            max-width: 700px;
-            margin: 0 auto 60px;
-            width: 100%;
-            animation: fadeInUp 0.8s ease 0.4s forwards;
-            opacity: 0;
-        }
-
-        .form-container {
-            background: rgba(255, 255, 255, 0.05);
-            padding: 40px;
-            border-radius: 24px;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            backdrop-filter: blur(10px);
-            transition: all 0.3s ease;
-        }
-
-        .form-container:hover {
-            box-shadow: 0 25px 70px rgba(139, 92, 246, 0.15);
-            border-color: rgba(139, 92, 246, 0.2);
-        }
-
-        .form-label {
-            display: block;
-            font-size: 16px;
-            font-weight: 600;
-            color: #e4e4e7;
-            margin-bottom: 12px;
-            text-align: left;
-        }
-
-        .textarea-wrapper {
-            position: relative;
-            margin-bottom: 24px;
-        }
-
-        .hero-form textarea {
-            width: 100%;
-            padding: 20px;
-            border: 1.5px solid rgba(255, 255, 255, 0.1);
-            border-radius: 16px;
-            font-size: 16px;
-            font-family: inherit;
-            transition: all 0.3s;
-            resize: vertical;
-            min-height: 140px;
-            line-height: 1.6;
-            background: rgba(0, 0, 0, 0.2);
-            color: #e4e4e7;
-        }
-
-        .hero-form textarea::placeholder {
-            color: #6b7280;
-        }
-
-        .hero-form textarea:focus {
-            outline: none;
-            border-color: #8b5cf6;
-            box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.15);
-        }
-
-        .char-counter {
-            position: absolute;
-            bottom: -24px;
-            right: 0;
-            font-size: 13px;
-            color: #6b7280;
-            font-weight: 500;
-        }
-
-        .generate-btn {
-            width: 100%;
-            background: linear-gradient(135deg, #7c3aed, #8b5cf6);
-            color: white;
-            padding: 20px;
-            border: none;
-            border-radius: 16px;
-            font-size: 18px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 10px;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .generate-btn::before {
-            content: '';
-            position: absolute;
-            top: 0; left: -100%; width: 100%; height: 100%;
-            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent);
-            transition: left 0.5s ease;
-        }
-
-        .generate-btn:hover::before {
-            left: 100%;
-        }
-
-        .generate-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 15px 40px rgba(139, 92, 246, 0.4);
-        }
-
-        .generate-btn:active {
-            transform: translateY(0);
-        }
-
-        .btn-text {
-            position: relative;
-            z-index: 1;
-        }
-
-        .btn-icon {
-            position: relative;
-            z-index: 1;
-            font-size: 20px;
-        }
-
-        /* Stats Section */
-        .stats {
-            display: flex;
-            justify-content: center;
-            gap: 80px;
-            padding: 80px 40px;
-            max-width: 1200px;
-            margin: 0 auto;
-        }
-
-        .stat-item {
-            text-align: center;
-            transition: transform 0.3s ease;
-        }
-
-        .stat-item:hover {
-            transform: scale(1.05);
-        }
-
-        .stat-number {
-            font-size: 48px;
-            font-weight: 800;
-            color: #a78bfa;
-            margin-bottom: 8px;
-        }
-
-        .stat-label {
-            font-size: 16px;
-            color: #9ca3af;
-            font-weight: 500;
-        }
-
-        /* About Section */
-        .about-section {
-            padding: 100px 40px;
-            background: rgba(255, 255, 255, 0.02);
-        }
-
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-        }
-
-        .content-section {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 80px;
-            align-items: center;
-            margin-bottom: 80px;
-        }
-
-        .content-section.reverse {
-            direction: rtl;
-        }
-
-        .content-section.reverse > * {
-            direction: ltr;
-        }
-
-        .content-text h2 {
-            font-size: 42px;
-            font-weight: 800;
-            color: #f4f4f5;
-            margin-bottom: 24px;
-            letter-spacing: -1px;
-        }
-
-        .content-text p {
-            font-size: 18px;
-            color: #9ca3af;
-            line-height: 1.8;
-            margin-bottom: 20px;
-        }
-
-        .content-image {
-            position: relative;
-        }
-
-        .content-image img {
-            width: 100%;
-            border-radius: 16px;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
-            border: 1px solid rgba(255, 255, 255, 0.06);
-            transition: transform 0.4s ease, box-shadow 0.4s ease;
-        }
-
-        .content-image img:hover {
-            transform: scale(1.02);
-            box-shadow: 0 25px 70px rgba(139, 92, 246, 0.2);
-        }
-
-        /* Features Grid */
-        .features-section {
-            padding: 100px 40px;
-        }
-
-        .section-title {
-            text-align: center;
-            font-size: 48px;
-            font-weight: 800;
-            margin-bottom: 60px;
-            color: #f4f4f5;
-        }
-
-        .features-grid {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 40px;
-            max-width: 1200px;
-            margin: 0 auto;
-        }
-
-        .feature-card {
-            padding: 40px;
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: 16px;
-            transition: all 0.4s ease;
-            border: 1px solid rgba(255, 255, 255, 0.06);
-        }
-
-        .feature-card:hover {
-            transform: translateY(-8px);
-            box-shadow: 0 20px 60px rgba(139, 92, 246, 0.15);
-            border-color: rgba(139, 92, 246, 0.3);
-        }
-
-        .feature-icon {
-            width: 56px;
-            height: 56px;
-            background: linear-gradient(135deg, #7c3aed, #8b5cf6);
-            border-radius: 12px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 28px;
-            margin-bottom: 20px;
-        }
-
-        .feature-card h3 {
-            font-size: 22px;
-            font-weight: 700;
-            margin-bottom: 12px;
-            color: #f4f4f5;
-        }
-
-        .feature-card p {
-            font-size: 16px;
-            color: #9ca3af;
-            line-height: 1.6;
-        }
-
-        /* Contact Section */
-        .contact-section {
-            padding: 100px 40px;
-            background: rgba(255, 255, 255, 0.02);
-        }
-
-        .contact-container {
-            max-width: 800px;
-            margin: 0 auto;
-        }
-
-        .contact-form {
-            background: rgba(255, 255, 255, 0.05);
-            padding: 60px;
-            border-radius: 20px;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
-            border: 1px solid rgba(255, 255, 255, 0.06);
-            backdrop-filter: blur(10px);
-        }
-
-        .form-group {
-            margin-bottom: 30px;
-        }
-
-        .form-group label {
-            display: block;
-            font-weight: 600;
-            margin-bottom: 8px;
-            color: #e4e4e7;
-        }
-
-        .form-group input,
-        .form-group textarea {
-            width: 100%;
-            padding: 16px;
-            border: 1.5px solid rgba(255, 255, 255, 0.1);
-            border-radius: 12px;
-            font-size: 16px;
-            font-family: inherit;
-            transition: all 0.3s;
-            background: rgba(0, 0, 0, 0.2);
-            color: #e4e4e7;
-        }
-
-        .form-group input::placeholder,
-        .form-group textarea::placeholder {
-            color: #6b7280;
-        }
-
-        .form-group input:focus,
-        .form-group textarea:focus {
-            outline: none;
-            border-color: #8b5cf6;
-            box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.15);
-        }
-
-        .form-group textarea {
-            min-height: 150px;
-            resize: vertical;
-        }
-
-        .submit-btn {
-            width: 100%;
-            background: linear-gradient(135deg, #7c3aed, #8b5cf6);
-            color: white;
-            padding: 18px;
-            border: none;
-            border-radius: 12px;
-            font-size: 18px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s;
-        }
-
-        .submit-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 30px rgba(139, 92, 246, 0.4);
-        }
-
-        /* Footer */
-        footer {
-            padding: 80px 40px 40px;
-            background: rgba(0, 0, 0, 0.2);
-            border-top: 1px solid rgba(255, 255, 255, 0.06);
-        }
-
-        .footer-content {
-            max-width: 1200px;
-            margin: 0 auto;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 30px;
-        }
-
-        .footer-social {
-            text-align: center;
-        }
-
-        .footer-social h3 {
-            color: #e4e4e7;
-            font-size: 18px;
-            font-weight: 600;
-            margin-bottom: 20px;
-        }
-
-        .social-links {
-            display: flex;
-            gap: 20px;
-            justify-content: center;
-            flex-wrap: wrap;
-        }
-
-        .social-link {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 12px 24px;
-            border-radius: 12px;
-            color: #9ca3af;
-            text-decoration: none;
-            font-size: 15px;
-            font-family: Poppins, serif;
-            text-decoration: underline;
-            font-weight: 300;
-            transition: all 0.3s;
-        }
-
-        .social-link:hover {
-            color: #a78bfa;
-            transform: translateY(-2px);
-        }
-
-        .footer-divider {
-            width: 100%;
-            height: 1px;
-            background: rgba(255, 255, 255, 0.06);
-            margin: 20px 0;
-        }
-
-        .footer-copyright {
-            color: #6b7280;
-            font-size: 15px;
-            text-align: center;
-        }
-
-        @media (max-width: 768px) {
-            footer {
-                padding: 60px 20px 30px;
-            }
-
-            .footer-social h3 {
-                font-size: 16px;
-            }
-
-            .social-links {
-                gap: 12px;
-            }
-
-            .social-link {
-                padding: 10px 18px;
-                font-size: 14px;
-            }
-        }
-
-        @media (max-width: 480px) {
-            .social-links {
-                flex-direction: column;
-                width: 100%;
-                max-width: 300px;
-            }
-
-            .social-link {
-                width: 100%;
-                justify-content: center;
-            }
-        }
-
-        /* Responsive Design */
-        @media (max-width: 1024px) {
-            .content-section {
-                grid-template-columns: 1fr;
-                gap: 40px;
-            }
-
-            .features-grid {
-                grid-template-columns: repeat(2, 1fr);
-                gap: 30px;
-            }
-
-            .stats {
-                gap: 40px;
-            }
-
-            nav {
-                padding: 20px 30px;
-            }
-        }
-
-        @media (max-width: 768px) {
-            .hero {
-                padding: 100px 20px 60px;
-            }
-
-            .hero h1 {
-                font-size: 42px;
-            }
-
-            .hero-subtitle {
-                font-size: 18px;
-                margin-bottom: 30px;
-            }
-
-            .form-container {
-                padding: 30px 20px;
-                border-radius: 20px;
-            }
-
-            .hero-form textarea {
-                padding: 16px;
-                font-size: 15px;
-                min-height: 120px;
-            }
-
-            .generate-btn {
-                padding: 18px;
-                font-size: 16px;
-            }
-
-            .nav-links {
-                position: fixed;
-                top: 73px;
-                right: -100%;
-                flex-direction: column;
-                background: rgba(15, 15, 25, 0.98);
-                backdrop-filter: blur(20px);
-                width: 70%;
-                max-width: 300px;
-                height: calc(100vh - 73px);
-                padding: 40px 20px;
-                gap: 30px;
-                box-shadow: -5px 0 20px rgba(0, 0, 0, 0.2);
-                transition: right 0.3s ease;
-                align-items: flex-start;
-                border-left: 1px solid rgba(255, 255, 255, 0.06);
-            }
-
-            .nav-links.active {
-                right: 0;
-            }
-
-            .hamburger {
-                display: flex;
-            }
-
-            .hamburger.active span:nth-child(1) {
-                transform: rotate(45deg) translate(8px, 8px);
-            }
-
-            .hamburger.active span:nth-child(2) {
-                opacity: 0;
-            }
-
-            .hamburger.active span:nth-child(3) {
-                transform: rotate(-45deg) translate(7px, -7px);
-            }
-
-            .features-grid {
-                grid-template-columns: 1fr;
-                gap: 25px;
-            }
-
-            .feature-card {
-                padding: 30px;
-            }
-
-            .stats {
-                flex-direction: column;
-                gap: 40px;
-                padding: 60px 20px;
-            }
-
-            .content-text h2 {
-                font-size: 32px;
-            }
-
-            .content-text p {
-                font-size: 16px;
-            }
-
-            .section-title {
-                font-size: 36px;
-            }
-
-            .contact-form {
-                padding: 40px 25px;
-            }
-
-            nav {
-                padding: 20px;
-            }
-
-            .logo {
-                font-size: 24px;
-            }
-
-            .about-section,
-            .features-section,
-            .contact-section {
-                padding: 80px 20px;
-            }
-        }
-
-        @media (max-width: 480px) {
-            .hero h1 {
-                font-size: 32px;
-            }
-
-            .hero-subtitle {
-                font-size: 16px;
-            }
-
-            .form-container {
-                padding: 25px 15px;
-            }
-
-            .stat-number {
-                font-size: 36px;
-            }
-
-            .stat-label {
-                font-size: 14px;
-            }
-
-            .content-text h2 {
-                font-size: 28px;
-            }
-
-            .section-title {
-                font-size: 30px;
-            }
-
-            .feature-card {
-                padding: 25px;
-            }
-
-            .feature-icon {
-                width: 48px;
-                height: 48px;
-                font-size: 24px;
-            }
-
-            .feature-card h3 {
-                font-size: 20px;
-            }
-
-            .feature-card p {
-                font-size: 15px;
-            }
-        }
-
-    </style>
+    <title>PresentAI — AI-Powered Presentations in Seconds</title>
+    <meta name="description" content="Describe your topic in plain language and PresentAI builds a complete, professionally designed presentation in under a minute. No design skills required.">
+    <meta name="theme-color" content="#070711">
+
+    <meta property="og:title" content="PresentAI — AI-Powered Presentations">
+    <meta property="og:description" content="Turn an idea into a finished deck in seconds.">
+    <meta property="og:type" content="website">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/presentai.css') }}">
 </head>
 <body>
-    <header>
-        <nav>
-            <div class="logo" onclick="document.getElementById('home').scrollIntoView({behavior: 'smooth'})">
+<a class="skip-link" href="#main">Skip to content</a>
+
+<div class="aurora" aria-hidden="true"></div>
+<div class="grain" aria-hidden="true"></div>
+
+<div class="page">
+
+    <!-- ============ NAV ============ -->
+    <div class="nav-wrap">
+        <nav class="nav" aria-label="Main">
+            <a href="#home" class="brand">
+                <span class="brand-mark" aria-hidden="true">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 3l1.9 5.3L19 10l-5.1 1.7L12 17l-1.9-5.3L5 10l5.1-1.7z"/>
+                    </svg>
+                </span>
                 PresentAI
-            </div>
-            <ul class="nav-links" id="navLinks">
-                <li><a href="#home">Home</a></li>
-                <li><a href="#about">About</a></li>
-                <li><a href="#features">Features</a></li>
-                <li><a href="#contact">Contact</a></li>
-                <li><a href="/login">Login</a></li>
-                <li><a href="/register">Sign up</a></li>
+            </a>
+
+            <ul class="nav-links">
+                <li><a class="nav-link" href="#home">Home</a></li>
+                <li><a class="nav-link" href="#about">About</a></li>
+                <li><a class="nav-link" href="#features">Features</a></li>
+                <li><a class="nav-link" href="#contact">Contact</a></li>
             </ul>
-            <div class="hamburger" id="hamburger">
-                <span></span>
-                <span></span>
-                <span></span>
+
+            <div class="nav-actions">
+                {% if logged_in %}
+                    <a href="/dashboard" class="btn btn-primary">Open dashboard</a>
+                {% else %}
+                    <a href="/login" class="btn btn-quiet">Log in</a>
+                    <a href="/register" class="btn btn-primary">Get started</a>
+                {% endif %}
+
+                <button class="hamburger" id="navToggle" type="button"
+                        aria-label="Toggle navigation" aria-expanded="false" aria-controls="mobileMenu">
+                    <span></span><span></span><span></span>
+                </button>
             </div>
         </nav>
-    </header>
+    </div>
 
-    <!-- HOME SECTION -->
-    <section id="home" class="hero">
-        <h1>Create <span class="gradient-text">Stunning Presentations</span><br>in Seconds</h1>
-        <p class="hero-subtitle">Transform your ideas into professional presentations with the power of AI. No design skills required.</p>
+    <div class="mobile-menu" id="mobileMenu">
+        <a class="nav-link" href="#home">Home</a>
+        <a class="nav-link" href="#about">About</a>
+        <a class="nav-link" href="#features">Features</a>
+        <a class="nav-link" href="#contact">Contact</a>
+        {% if logged_in %}
+            <a class="nav-link" href="/dashboard">Dashboard</a>
+        {% else %}
+            <a class="nav-link" href="/login">Log in</a>
+            <a class="nav-link" href="/register">Sign up</a>
+        {% endif %}
+    </div>
 
-        <div class="hero-form">
+    <main id="main">
+
+    <!-- ============ HERO ============ -->
+    <section id="home" class="container" style="padding-block: clamp(140px, 18vh, 200px) var(--s-8); text-align: center;">
+        <span class="badge reveal" style="margin-bottom: var(--s-5);">
+            <span class="badge-dot" aria-hidden="true"></span>
+            Powered by GPT-4o&nbsp;mini &amp; FLUX
+        </span>
+
+        <h1 class="reveal" style="margin-bottom: var(--s-5);">
+            Create <span class="grad-text">stunning presentations</span><br>in seconds
+        </h1>
+
+        <p class="lede reveal" style="margin: 0 auto var(--s-7);">
+            Transform your ideas into professional presentations with the power of AI.
+            No design skills required.
+        </p>
+
+        <!-- Prompt card — the product's front door -->
+        <div class="card spotlight reveal" style="max-width: 720px; margin-inline: auto; text-align: left;">
             <form action="/generate_ppt" method="post" id="heroForm">
-                <div class="form-container">
-                    <label class="form-label">Describe Your Presentation</label>
-                    <div class="textarea-wrapper">
-                        <textarea
-                            name="user_prompt"
-                            rows="4"
-                            placeholder="Example: The future of AI in healthcare - covering diagnosis, treatment, patient care, and ethical considerations"
-                            required
-                            maxlength="500"
-                            id="userPrompt"
-                        ></textarea>
-                        <span class="char-counter"><span id="charCount">0</span>/500</span>
-                    </div>
-                    <button type="submit" class="generate-btn" id="heroGenerateBtn">
-                        <span class="btn-text">Generate Presentation</span>
-                    </button>
+                <label class="label" for="userPrompt">Describe your presentation</label>
+                <div style="position: relative;">
+                    <textarea
+                        class="textarea"
+                        name="user_prompt"
+                        rows="4"
+                        placeholder="Example: The future of AI in healthcare — covering diagnosis, treatment, patient care, and ethical considerations"
+                        required
+                        maxlength="500"
+                        id="userPrompt"
+                        data-counter="charCount"
+                        data-maxheight="260"
+                        style="padding-bottom: var(--s-7);"
+                    ></textarea>
+                    <span class="char-counter"><span id="charCount">0</span>/500</span>
                 </div>
+
+                <button type="submit" class="btn btn-primary btn-lg btn-block" id="heroGenerateBtn" style="margin-top: var(--s-4);">
+                    <span class="btn-spinner" aria-hidden="true"></span>
+                    <span>Generate presentation</span>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M5 12h14M13 6l6 6-6 6"/>
+                    </svg>
+                </button>
+            </form>
+
+            <p class="dim" style="font-size: .8125rem; margin-top: var(--s-3); text-align: center;">
+                Free to start · Downloads as a .pptx file
+            </p>
+        </div>
+    </section>
+
+    <!-- ============ STATS ============ -->
+    <section class="container" style="padding-bottom: var(--s-8);">
+        <div class="grid grid-stats" style="max-width: 860px; margin-inline: auto;">
+            <div class="stat reveal reveal-stagger" style="--i:0">
+                <div class="stat-value"><span data-count-to="50" data-suffix="K+">50K+</span></div>
+                <div class="stat-label">Presentations created</div>
+            </div>
+            <div class="stat reveal reveal-stagger" style="--i:1">
+                <div class="stat-value"><span data-count-to="10" data-suffix="K+">10K+</span></div>
+                <div class="stat-label">Happy users</div>
+            </div>
+            <div class="stat reveal reveal-stagger" style="--i:2">
+                <div class="stat-value"><span data-count-to="98" data-suffix="%">98%</span></div>
+                <div class="stat-label">Satisfaction rate</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ============ ABOUT ============ -->
+    <section id="about" class="section container">
+        <div class="section-head reveal">
+            <span class="eyebrow">About</span>
+            <h2 style="margin-block: var(--s-3);">Presentations, without the busywork</h2>
+        </div>
+
+        <div class="grid grid-2" style="align-items: center; margin-bottom: var(--s-8);">
+            <div class="reveal">
+                <h3 style="margin-bottom: var(--s-4);">Our mission</h3>
+                <p class="lede" style="font-size: 1rem; margin-bottom: var(--s-4);">
+                    We believe creating professional presentations should be simple, fast, and
+                    accessible to everyone. That's why we built PresentAI.
+                </p>
+                <p class="muted">
+                    Our AI-powered platform eliminates the complexity of design and structure, letting
+                    you focus on what matters most: your message. Whether you're pitching investors,
+                    teaching students, or sharing ideas, PresentAI helps you communicate with confidence.
+                </p>
+            </div>
+            <div class="card reveal" style="padding: 0;">
+                <img src="https://images.unsplash.com/photo-1552664730-d307ca884978?w=800&h=600&fit=crop"
+                     alt="A team collaborating around a laptop while reviewing slides"
+                     loading="lazy" width="800" height="600"
+                     style="width:100%; height:100%; object-fit:cover; border-radius: var(--r-lg);">
+            </div>
+        </div>
+
+        <div class="grid grid-2" style="align-items: center; margin-bottom: var(--s-8);">
+            <div class="card reveal" style="padding: 0; order: 2;">
+                <img src="https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=800&h=600&fit=crop"
+                     alt="Analytics dashboard displayed on a monitor"
+                     loading="lazy" width="800" height="600"
+                     style="width:100%; height:100%; object-fit:cover; border-radius: var(--r-lg);">
+            </div>
+            <div class="reveal" style="order: 1;">
+                <h3 style="margin-bottom: var(--s-4);">How it works</h3>
+                <p class="lede" style="font-size: 1rem; margin-bottom: var(--s-4);">
+                    Simply describe your presentation topic in plain language. Our AI analyzes your
+                    prompt, identifies key themes, and generates a complete presentation with
+                    professional design and logical structure.
+                </p>
+                <p class="muted">
+                    No design skills needed. No templates to choose from. Just tell us what you need,
+                    and we'll create it in seconds.
+                </p>
+            </div>
+        </div>
+
+        <div class="grid grid-2" style="align-items: center;">
+            <div class="reveal">
+                <h3 style="margin-bottom: var(--s-4);">Built for everyone</h3>
+                <p class="lede" style="font-size: 1rem; margin-bottom: var(--s-4);">
+                    From students preparing class projects to executives pitching multi-million dollar
+                    deals, PresentAI adapts to your needs.
+                </p>
+                <p class="muted">
+                    Our platform understands context, tone, and purpose, delivering presentations that
+                    match your audience and goals perfectly every time.
+                </p>
+            </div>
+            <div class="card reveal" style="padding: 0;">
+                <img src="https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=800&h=600&fit=crop"
+                     alt="Colleagues gathered around a table in a bright meeting room"
+                     loading="lazy" width="800" height="600"
+                     style="width:100%; height:100%; object-fit:cover; border-radius: var(--r-lg);">
+            </div>
+        </div>
+    </section>
+
+    <!-- ============ FEATURES ============ -->
+    <section id="features" class="section container">
+        <div class="section-head reveal">
+            <span class="eyebrow">Features</span>
+            <h2 style="margin-block: var(--s-3);">Why choose PresentAI</h2>
+            <p class="lede">Everything you need to go from a blank page to a finished deck.</p>
+        </div>
+
+        <div class="grid grid-3">
+            <article class="card spotlight reveal reveal-stagger" style="--i:0">
+                <div class="icon-tile" aria-hidden="true">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M13 2L3 14h8l-1 8 10-12h-8z"/>
+                    </svg>
+                </div>
+                <h3 style="margin-bottom: var(--s-2);">Lightning fast</h3>
+                <p class="muted">Generate complete presentations in under 30 seconds. Save hours of design and formatting work.</p>
+            </article>
+
+            <article class="card spotlight reveal reveal-stagger" style="--i:1">
+                <div class="icon-tile" aria-hidden="true">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="13.5" cy="6.5" r="1.5"/><circle cx="17.5" cy="10.5" r="1.5"/>
+                        <circle cx="8.5" cy="7.5" r="1.5"/><circle cx="6.5" cy="12.5" r="1.5"/>
+                        <path d="M12 2a10 10 0 0 0 0 20c.9 0 1.6-.7 1.6-1.6 0-.4-.2-.8-.5-1.1-.3-.3-.4-.7-.4-1.1 0-.9.7-1.6 1.6-1.6H16a6 6 0 0 0 6-6c0-5-4.5-8.6-10-8.6z"/>
+                    </svg>
+                </div>
+                <h3 style="margin-bottom: var(--s-2);">Beautiful design</h3>
+                <p class="muted">Every slide follows modern design principles with perfect typography, colors, and spacing.</p>
+            </article>
+
+            <article class="card spotlight reveal reveal-stagger" style="--i:2">
+                <div class="icon-tile" aria-hidden="true">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 2a3 3 0 0 0-3 3v1a3 3 0 0 0-3 3 3 3 0 0 0-1 5.8A3 3 0 0 0 8 20a3 3 0 0 0 4 1 3 3 0 0 0 4-1 3 3 0 0 0 3-5.2A3 3 0 0 0 18 9a3 3 0 0 0-3-3V5a3 3 0 0 0-3-3z"/>
+                        <path d="M12 2v19"/>
+                    </svg>
+                </div>
+                <h3 style="margin-bottom: var(--s-2);">Smart AI</h3>
+                <p class="muted">Our AI understands context and creates relevant, well-structured content that makes sense.</p>
+            </article>
+
+            <article class="card spotlight reveal reveal-stagger" style="--i:3">
+                <div class="icon-tile" aria-hidden="true">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>
+                    </svg>
+                </div>
+                <h3 style="margin-bottom: var(--s-2);">Fully editable</h3>
+                <p class="muted">Customize every element to match your brand and style. Full creative control in your hands.</p>
+            </article>
+
+            <article class="card spotlight reveal reveal-stagger" style="--i:4">
+                <div class="icon-tile" aria-hidden="true">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="3" y="11" width="18" height="11" rx="2"/>
+                        <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                    </svg>
+                </div>
+                <h3 style="margin-bottom: var(--s-2);">Secure &amp; private</h3>
+                <p class="muted">Your data is encrypted and never shared. What you create stays private and secure.</p>
+            </article>
+
+            <article class="card spotlight reveal reveal-stagger" style="--i:5">
+                <div class="icon-tile" aria-hidden="true">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+                    </svg>
+                </div>
+                <h3 style="margin-bottom: var(--s-2);">Presentation history</h3>
+                <p class="muted">All your generated presentations are saved automatically. Access and re-download them anytime.</p>
+            </article>
+        </div>
+    </section>
+
+    <!-- ============ CONTACT ============ -->
+    <section id="contact" class="section container">
+        <div class="section-head reveal">
+            <span class="eyebrow">Contact</span>
+            <h2 style="margin-block: var(--s-3);">Get in touch</h2>
+            <p class="lede">Questions, feedback, or partnership ideas — we read every message.</p>
+        </div>
+
+        <div class="card reveal" style="max-width: 620px; margin-inline: auto;">
+            <form action="https://formspree.io/f/xbdlwngp" method="POST">
+                <div class="field">
+                    <label class="label" for="name">Name</label>
+                    <input class="input" type="text" id="name" name="name" required placeholder="Your name" autocomplete="name">
+                </div>
+                <div class="field">
+                    <label class="label" for="email">Email</label>
+                    <input class="input" type="email" id="email" name="email" required placeholder="your@email.com" autocomplete="email">
+                </div>
+                <div class="field">
+                    <label class="label" for="message">Message</label>
+                    <textarea class="textarea" id="message" name="message" required placeholder="Tell us what you need..."></textarea>
+                </div>
+                <button type="submit" class="btn btn-primary btn-block btn-lg">Send message</button>
             </form>
         </div>
     </section>
 
-    <section class="stats">
-        <div class="stat-item animate-on-scroll">
-            <div class="stat-number">50K+</div>
-            <div class="stat-label">Presentations Created</div>
-        </div>
-        <div class="stat-item animate-on-scroll">
-            <div class="stat-number">10K+</div>
-            <div class="stat-label">Happy Users</div>
-        </div>
-        <div class="stat-item animate-on-scroll">
-            <div class="stat-number">98%</div>
-            <div class="stat-label">Satisfaction Rate</div>
-        </div>
-    </section>
+    </main>
 
-    <!-- ABOUT SECTION -->
-    <section id="about" class="about-section">
+    <!-- ============ FOOTER ============ -->
+    <footer class="footer">
         <div class="container">
-            <div class="content-section animate-on-scroll">
-                <div class="content-text">
-                    <h2>Our Mission</h2>
-                    <p>We believe creating professional presentations should be simple, fast, and accessible to everyone. That's why we built PresentAI.</p>
-                    <p>Our AI-powered platform eliminates the complexity of design and structure, letting you focus on what matters most: your message. Whether you're pitching investors, teaching students, or sharing ideas, PresentAI helps you communicate with confidence.</p>
+            <div style="display:flex; flex-wrap:wrap; gap:var(--s-6); justify-content:space-between; align-items:flex-start;">
+                <div>
+                    <a href="#home" class="brand" style="margin-bottom: var(--s-3);">
+                        <span class="brand-mark" aria-hidden="true">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M12 3l1.9 5.3L19 10l-5.1 1.7L12 17l-1.9-5.3L5 10l5.1-1.7z"/>
+                            </svg>
+                        </span>
+                        PresentAI
+                    </a>
+                    <p class="dim" style="font-size:.9375rem; max-width: 34ch;">
+                        Turn an idea into a finished deck in seconds.
+                    </p>
                 </div>
-                <div class="content-image">
-                    <img src="https://images.unsplash.com/photo-1552664730-d307ca884978?w=600&h=500&fit=crop" alt="Mission">
-                </div>
-            </div>
 
-            <div class="content-section reverse animate-on-scroll">
-                <div class="content-text">
-                    <h2>How It Works</h2>
-                    <p>Simply describe your presentation topic in plain language. Our advanced AI analyzes your prompt, identifies key themes, and generates a complete presentation with professional design and logical structure.</p>
-                    <p>No design skills needed. No templates to choose from. Just tell us what you need, and we'll create it in seconds.</p>
-                </div>
-                <div class="content-image">
-                    <img src="https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=600&h=500&fit=crop" alt="How it works">
-                </div>
-            </div>
-
-            <div class="content-section animate-on-scroll">
-                <div class="content-text">
-                    <h2>Built for Everyone</h2>
-                    <p>From students preparing class projects to executives pitching multi-million dollar deals, PresentAI adapts to your needs.</p>
-                    <p>Our platform understands context, tone, and purpose, delivering presentations that match your audience and goals perfectly every time.</p>
-                </div>
-                <div class="content-image">
-                    <img src="https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=600&h=500&fit=crop" alt="For everyone">
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- FEATURES SECTION -->
-    <section id="features" class="features-section">
-        <h2 class="section-title animate-on-scroll">Why Choose PresentAI</h2>
-        <div class="features-grid">
-            <div class="feature-card animate-on-scroll">
-                <div class="feature-icon">&#9889;</div>
-                <h3>Lightning Fast</h3>
-                <p>Generate complete presentations in under 30 seconds. Save hours of design and formatting work.</p>
-            </div>
-            <div class="feature-card animate-on-scroll">
-                <div class="feature-icon">&#127912;</div>
-                <h3>Beautiful Design</h3>
-                <p>Every slide follows modern design principles with perfect typography, colors, and spacing.</p>
-            </div>
-            <div class="feature-card animate-on-scroll">
-                <div class="feature-icon">&#129504;</div>
-                <h3>Smart AI</h3>
-                <p>Our AI understands context and creates relevant, well-structured content that makes sense.</p>
-            </div>
-            <div class="feature-card animate-on-scroll">
-                <div class="feature-icon">&#9998;&#65039;</div>
-                <h3>Fully Editable</h3>
-                <p>Customize every element to match your brand and style. Full creative control in your hands.</p>
-            </div>
-            <div class="feature-card animate-on-scroll">
-                <div class="feature-icon">&#128274;</div>
-                <h3>Secure & Private</h3>
-                <p>Your data is encrypted and never shared. What you create stays private and secure.</p>
-            </div>
-            <div class="feature-card animate-on-scroll">
-                <div class="feature-icon">&#128194;</div>
-                <h3>Presentation History</h3>
-                <p>All your generated presentations are saved automatically. Access and re-download them anytime from your history.</p>
-            </div>
-        </div>
-    </section>
-
-    <!-- CONTACT SECTION -->
-    <section id="contact" class="contact-section">
-        <div class="contact-container">
-            <h2 class="section-title animate-on-scroll">Get in Touch</h2>
-            <div class="contact-form animate-on-scroll">
-                <form action="https://formspree.io/f/xbdlwngp" method="POST">
-                    <div class="form-group">
-                        <label for="name">Name</label>
-                        <input type="text" id="name" name="name" required placeholder="Your name">
+                <div>
+                    <h3 style="font-size:.9375rem; margin-bottom: var(--s-4);">Follow along</h3>
+                    <div class="social-row">
+                        <a href="https://instagram.com/mirzoulugbek.fazilov" target="_blank" rel="noopener noreferrer" class="social-link" aria-label="Instagram">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1"/>
+                            </svg>
+                        </a>
+                        <a href="https://t.me/MirzoUlugbek_Diary" target="_blank" rel="noopener noreferrer" class="social-link" aria-label="Telegram">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M21.9 4.3 18.7 19.4c-.2 1.1-.9 1.3-1.8.8l-4.9-3.6-2.4 2.3c-.3.3-.5.5-1 .5l.3-5 9.1-8.2c.4-.4-.1-.6-.6-.2L6.2 13.1l-4.8-1.5c-1-.3-1.1-1 .2-1.5l18.9-7.3c.9-.3 1.6.2 1.4 1.5z"/>
+                            </svg>
+                        </a>
+                        <a href="https://tiktok.com/@mirzoulugbek.fazilov" target="_blank" rel="noopener noreferrer" class="social-link" aria-label="TikTok">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M16.6 5.8a4.8 4.8 0 0 1-1.2-3.1h-3.1v12.4a2.6 2.6 0 1 1-2.6-2.6c.27 0 .53.04.78.12V9.4a5.8 5.8 0 1 0 4.92 5.73V9.01a7.9 7.9 0 0 0 4.6 1.47V7.37a4.8 4.8 0 0 1-3.4-1.57z"/>
+                            </svg>
+                        </a>
+                        <a href="https://www.linkedin.com/in/mirzo-ulugbek-fazilov-a90b9a309/" target="_blank" rel="noopener noreferrer" class="social-link" aria-label="LinkedIn">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M4.98 3.5a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5zM3 9h4v12H3zM9 9h3.8v1.7h.05c.53-1 1.83-2.05 3.75-2.05 4 0 4.75 2.63 4.75 6.05V21H17.6v-5.5c0-1.31-.03-3-1.83-3-1.84 0-2.12 1.43-2.12 2.9V21H9z"/>
+                            </svg>
+                        </a>
                     </div>
-                    <div class="form-group">
-                        <label for="email">Email</label>
-                        <input type="email" id="email" name="email" required placeholder="your@email.com">
-                    </div>
-                    <div class="form-group">
-                        <label for="message">Message</label>
-                        <textarea id="message" name="message" required placeholder="Tell us what you need..."></textarea>
-                    </div>
-                    <button type="submit" class="submit-btn">Send Message</button>
-                </form>
-            </div>
-        </div>
-    </section>
-
-    <footer>
-        <div class="footer-content">
-            <div class="footer-social">
-                <h3>My Social Media</h3>
-                <div class="social-links">
-                    <a href="https://instagram.com/mirzoulugbek.fazilov" target="_blank" rel="noopener noreferrer" class="social-link">
-                        Instagram
-                    </a>
-                    <a href="https://t.me/MirzoUlugbek_Diary" target="_blank" rel="noopener noreferrer" class="social-link">
-                        Telegram
-                    </a>
-                    <a href="https://tiktok.com/@mirzoulugbek.fazilov" target="_blank" rel="noopener noreferrer" class="social-link">
-                        TikTok
-                    </a>
-                    <a href="https://www.linkedin.com/in/mirzo-ulugbek-fazilov-a90b9a309/?miniProfileUrn=urn%3Ali%3Afsd_profile%3AACoAAE6p9owBv6Saj9gBHF_HvzCb5uxdsn-tme8" target="_blank" rel="noopener noreferrer" class="social-link">
-                        LinkedIn
-                    </a>
                 </div>
             </div>
-            <div class="footer-divider"></div>
-            <p class="footer-copyright">&copy; 2026 PresentAI. All rights reserved.</p>
+
+            <hr class="divider">
+            <p class="dim" style="font-size:.875rem; text-align:center;">&copy; 2026 PresentAI. All rights reserved.</p>
         </div>
     </footer>
 
-    <script>
-        // Active navigation highlighting
-        const sections = document.querySelectorAll('section[id]');
-        const navLinks = document.querySelectorAll('.nav-links a');
+</div>
 
-        window.addEventListener('scroll', () => {
-            let current = '';
-            sections.forEach(section => {
-                const sectionTop = section.offsetTop;
-                const sectionHeight = section.clientHeight;
-                if (scrollY >= sectionTop - 100) {
-                    current = section.getAttribute('id');
-                }
+<script src="{{ url_for('static', filename='js/presentai.js') }}" defer></script>
+<script>
+    // Highlight the nav link for whichever section is in view.
+    (function () {
+        var sections = document.querySelectorAll('section[id]');
+        var links = document.querySelectorAll('.nav-links .nav-link');
+        if (!sections.length || !links.length) return;
+
+        var ticking = false;
+        function update() {
+            var current = '';
+            sections.forEach(function (s) {
+                if (window.scrollY >= s.offsetTop - 120) current = s.id;
             });
-
-            navLinks.forEach(link => {
-                link.classList.remove('active');
-                if (link.getAttribute('href') === `#${current}`) {
-                    link.classList.add('active');
-                }
+            links.forEach(function (l) {
+                l.classList.toggle('active', l.getAttribute('href') === '#' + current);
             });
-        });
+            ticking = false;
+        }
+        window.addEventListener('scroll', function () {
+            if (!ticking) { window.requestAnimationFrame(update); ticking = true; }
+        }, { passive: true });
+        update();
+    })();
 
-        // Mobile menu toggle
-        const hamburger = document.getElementById('hamburger');
-        const navLinksEl = document.getElementById('navLinks');
-
-        hamburger.addEventListener('click', () => {
-            hamburger.classList.toggle('active');
-            navLinksEl.classList.toggle('active');
-        });
-
-        // Close mobile menu when clicking a link
-        navLinks.forEach(link => {
-            link.addEventListener('click', () => {
-                hamburger.classList.remove('active');
-                navLinksEl.classList.remove('active');
-            });
-        });
-
-        // Close mobile menu when clicking outside
-        document.addEventListener('click', (e) => {
-            if (!hamburger.contains(e.target) && !navLinksEl.contains(e.target)) {
-                hamburger.classList.remove('active');
-                navLinksEl.classList.remove('active');
-            }
-        });
-
-        // Character counter for textarea
-        const userPrompt = document.getElementById('userPrompt');
-        const charCount = document.getElementById('charCount');
-
-        userPrompt.addEventListener('input', () => {
-            charCount.textContent = userPrompt.value.length;
-        });
-
-        // Scroll animations with Intersection Observer
-        const observer = new IntersectionObserver((entries) => {
-            entries.forEach((entry, index) => {
-                if (entry.isIntersecting) {
-                    // Stagger the animation for siblings
-                    const siblings = entry.target.parentElement.querySelectorAll('.animate-on-scroll');
-                    let delay = 0;
-                    siblings.forEach((sib, i) => {
-                        if (sib === entry.target) delay = i * 0.1;
-                    });
-                    entry.target.style.transitionDelay = delay + 's';
-                    entry.target.classList.add('visible');
-                    observer.unobserve(entry.target);
-                }
-            });
-        }, { threshold: 0.1, rootMargin: '0px 0px -50px 0px' });
-
-        document.querySelectorAll('.animate-on-scroll').forEach(el => observer.observe(el));
-
-        // Redirect to login if not logged in
-        {% if not logged_in %}
-        document.getElementById('heroForm').addEventListener('submit', function(e) {
-            e.preventDefault();
-            window.location.href = '/login';
-        });
-        {% endif %}
-    </script>
+    {% if not logged_in %}
+    // Signed-out visitors get sent to login instead of burning a generation.
+    document.getElementById('heroForm').addEventListener('submit', function (e) {
+        e.preventDefault();
+        window.location.href = '/login';
+    });
+    {% else %}
+    // Signed in: show the button working, since the POST returns a file download.
+    document.getElementById('heroForm').addEventListener('submit', function () {
+        var btn = document.getElementById('heroGenerateBtn');
+        btn.setAttribute('aria-busy', 'true');
+        btn.disabled = true;
+    });
+    {% endif %}
+</script>
 </body>
 </html>
