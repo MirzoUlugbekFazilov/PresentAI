@@ -3,982 +3,337 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ t.dashboard }} - PresentAI</title>
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
-
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            line-height: 1.7;
-            color: #ffffff;
-            min-height: 100vh;
-            background: linear-gradient(
-                135deg,
-                #0f0f17 0%,
-                #1e1233 45%,
-                #191028 100%
-            );
-            overflow-x: hidden;
-        }
-
-        @keyframes fadeInUp {
-            from { opacity: 0; transform: translateY(30px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        @keyframes fadeIn {
-            from { opacity: 0; }
-            to { opacity: 1; }
-        }
-
-        @keyframes slideInLeft {
-            from { opacity: 0; transform: translateX(-30px); }
-            to { opacity: 1; transform: translateX(0); }
-        }
-
-        @keyframes shimmer {
-            0% { background-position: -200% 0; }
-            100% { background-position: 200% 0; }
-        }
-
-        /* Sidebar */
-        .sidebar {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 240px;
-            height: 100vh;
-            background: rgba(15, 15, 25, 0.95);
-            backdrop-filter: blur(20px);
-            border-right: 1px solid rgba(255, 255, 255, 0.06);
-            color: white;
-            display: flex;
-            flex-direction: column;
-            z-index: 1000;
-            transition: transform 0.3s;
-            animation: slideInLeft 0.4s ease forwards;
-        }
-
-        .sidebar-logo {
-            padding: 24px 24px 32px;
-            font-size: 22px;
-            font-weight: 800;
-            color: white;
-            text-decoration: none;
-            display: block;
-            letter-spacing: -0.5px;
-        }
-
-        .sidebar-nav {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-            padding: 0 12px;
-        }
-
-        .sidebar-link {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            padding: 12px 16px;
-            border-radius: 10px;
-            color: #6b7280;
-            text-decoration: none;
-            font-size: 15px;
-            font-weight: 500;
-            transition: all 0.2s;
-        }
-
-        .sidebar-link:hover {
-            background: rgba(255, 255, 255, 0.06);
-            color: #e4e4e7;
-        }
-
-        .sidebar-link.active {
-            background: rgba(139, 92, 246, 0.15);
-            color: #a78bfa;
-        }
-
-        .sidebar-link svg {
-            width: 20px;
-            height: 20px;
-            flex-shrink: 0;
-        }
-
-        .sidebar-user {
-            padding: 20px 24px;
-            border-top: 1px solid rgba(255, 255, 255, 0.06);
-        }
-
-        .sidebar-user-name {
-            font-size: 14px;
-            font-weight: 600;
-            color: white;
-            margin-bottom: 2px;
-        }
-
-        .sidebar-user-email {
-            font-size: 12px;
-            color: #6b7280;
-            word-break: break-all;
-        }
-
-        .sidebar-logout {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            padding: 12px 16px;
-            margin: 0 12px 16px;
-            border-radius: 10px;
-            color: #f87171;
-            text-decoration: none;
-            font-size: 15px;
-            font-weight: 500;
-            transition: all 0.2s;
-        }
-
-        .sidebar-logout:hover {
-            background: rgba(248, 113, 113, 0.1);
-        }
-
-        .sidebar-logout svg {
-            width: 20px;
-            height: 20px;
-        }
-
-        /* Main content */
-        .main-content {
-            margin-left: 240px;
-            min-height: 100vh;
-        }
-
-        /* Top bar */
-        .topbar {
-            background: rgba(15, 15, 25, 0.6);
-            backdrop-filter: blur(20px);
-            padding: 16px 40px;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .topbar-greeting {
-            font-size: 15px;
-            color: #9ca3af;
-        }
-
-        .topbar-greeting strong {
-            color: #e4e4e7;
-        }
-
-        .mobile-toggle {
-            display: none;
-            background: none;
-            border: none;
-            cursor: pointer;
-            color: #e4e4e7;
-            padding: 8px;
-        }
-
-        /* Hamburger */
-        .hamburger {
-            display: none;
-            flex-direction: column;
-            gap: 5px;
-            cursor: pointer;
-            padding: 10px;
-            z-index: 10;
-        }
-
-        .hamburger span {
-            width: 25px;
-            height: 3px;
-            background: #a78bfa;
-            border-radius: 3px;
-            transition: all 0.3s;
-        }
-
-        .hamburger.active span:nth-child(1) {
-            transform: rotate(45deg) translate(6px, 6px);
-        }
-
-        .hamburger.active span:nth-child(2) {
-            opacity: 0;
-        }
-
-        .hamburger.active span:nth-child(3) {
-            transform: rotate(-45deg) translate(6px, -6px);
-        }
-
-        /* Dashboard content */
-        .dashboard-content {
-            padding: 48px 40px;
-            max-width: 900px;
-            margin: 0 auto;
-        }
-
-        .dashboard-content h1 {
-            font-size: 48px;
-            font-weight: 800;
-            color: #f4f4f5;
-            margin-bottom: 16px;
-            letter-spacing: -1.5px;
-            line-height: 1.1;
-            animation: fadeInUp 0.6s ease forwards;
-            text-align: center;
-        }
-
-        .gradient-text {
-            background: linear-gradient(135deg, #a78bfa, #8b5cf6, #c084fc);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-
-        .hero-subtitle {
-            font-size: 18px;
-            color: #9ca3af;
-            margin-bottom: 40px;
-            font-weight: 400;
-            text-align: center;
-        }
-
-        /* Form */
-        .form-container {
-            background: rgba(255, 255, 255, 0.05);
-            padding: 36px;
-            border-radius: 20px;
-            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            margin-bottom: 48px;
-            backdrop-filter: blur(10px);
-            animation: fadeInUp 0.6s ease 0.2s forwards;
-            opacity: 0;
-        }
-
-        .form-label {
-            display: block;
-            font-size: 15px;
-            font-weight: 600;
-            color: #e4e4e7;
-            margin-bottom: 10px;
-        }
-
-        .textarea-wrapper {
-            position: relative;
-            margin-bottom: 20px;
-        }
-
-        .form-container textarea {
-            width: 100%;
-            padding: 16px;
-            border: 1.5px solid rgba(255, 255, 255, 0.1);
-            border-radius: 12px;
-            font-size: 15px;
-            font-family: inherit;
-            transition: border-color 0.2s, box-shadow 0.2s;
-            resize: vertical;
-            min-height: 120px;
-            line-height: 1.6;
-            color: #e4e4e7;
-            background: rgba(0, 0, 0, 0.2);
-        }
-
-        .form-container textarea::placeholder {
-            color: #6b7280;
-        }
-
-        .form-container textarea:focus {
-            outline: none;
-            border-color: #8b5cf6;
-            box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.15);
-        }
-
-        .char-counter {
-            position: absolute;
-            bottom: -22px;
-            right: 0;
-            font-size: 12px;
-            color: #6b7280;
-        }
-
-        .generate-btn {
-            width: 100%;
-            background: linear-gradient(135deg, #7c3aed, #8b5cf6);
-            color: white;
-            padding: 16px;
-            border: none;
-            border-radius: 12px;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            font-family: inherit;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .generate-btn::before {
-            content: '';
-            position: absolute;
-            top: 0; left: -100%; width: 100%; height: 100%;
-            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent);
-            transition: left 0.5s ease;
-        }
-
-        .generate-btn:hover::before {
-            left: 100%;
-        }
-
-        .generate-btn:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 8px 24px rgba(139, 92, 246, 0.4);
-        }
-
-        /* Tips */
-        .tips-title {
-            font-size: 18px;
-            font-weight: 700;
-            color: #e4e4e7;
-            margin-bottom: 20px;
-            text-align: center;
-        }
-
-        .tips-grid {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 16px;
-            margin-bottom: 48px;
-        }
-
-        .tip-card {
-            background: rgba(255, 255, 255, 0.05);
-            padding: 20px;
-            border-radius: 14px;
-            border: 1px solid rgba(255, 255, 255, 0.06);
-            transition: all 0.3s;
-            animation: fadeInUp 0.5s ease forwards;
-            opacity: 0;
-        }
-
-        .tip-card:nth-child(1) { animation-delay: 0.3s; }
-        .tip-card:nth-child(2) { animation-delay: 0.4s; }
-        .tip-card:nth-child(3) { animation-delay: 0.5s; }
-        .tip-card:nth-child(4) { animation-delay: 0.6s; }
-
-        .tip-card:hover {
-            border-color: rgba(139, 92, 246, 0.3);
-            box-shadow: 0 4px 12px rgba(139, 92, 246, 0.1);
-        }
-
-        .tip-icon {
-            font-size: 24px;
-            margin-bottom: 8px;
-            display: block;
-        }
-
-        .tip-text {
-            font-size: 14px;
-            color: #9ca3af;
-            line-height: 1.5;
-        }
-
-        /* Stats */
-        .stats-row {
-            display: flex;
-            gap: 24px;
-            margin-bottom: 48px;
-        }
-
-        .stat-card {
-            flex: 1;
-            background: rgba(255, 255, 255, 0.05);
-            padding: 24px;
-            border-radius: 14px;
-            border: 1px solid rgba(255, 255, 255, 0.06);
-            text-align: center;
-            transition: all 0.3s;
-            animation: fadeInUp 0.5s ease forwards;
-            opacity: 0;
-        }
-
-        .stat-card:nth-child(1) { animation-delay: 0.5s; }
-        .stat-card:nth-child(2) { animation-delay: 0.6s; }
-        .stat-card:nth-child(3) { animation-delay: 0.7s; }
-
-        .stat-card:hover {
-            transform: translateY(-4px);
-            border-color: rgba(139, 92, 246, 0.3);
-            box-shadow: 0 8px 24px rgba(139, 92, 246, 0.1);
-        }
-
-        .stat-number {
-            font-size: 32px;
-            font-weight: 800;
-            color: #a78bfa;
-            margin-bottom: 4px;
-        }
-
-        .stat-label {
-            font-size: 13px;
-            color: #9ca3af;
-        }
-
-        /* Footer */
-        .dashboard-footer {
-            padding: 32px 0;
-            border-top: 1px solid rgba(255, 255, 255, 0.06);
-            text-align: center;
-        }
-
-        .footer-social h3 {
-            font-size: 15px;
-            font-weight: 600;
-            color: #e4e4e7;
-            margin-bottom: 12px;
-        }
-
-        .social-links {
-            display: flex;
-            gap: 16px;
-            justify-content: center;
-            flex-wrap: wrap;
-            margin-bottom: 16px;
-        }
-
-        .social-link {
-            color: #a78bfa;
-            text-decoration: none;
-            font-size: 14px;
-            font-weight: 500;
-        }
-
-        .social-link:hover {
-            text-decoration: underline;
-            color: #c4b5fd;
-        }
-
-        .footer-copyright {
-            font-size: 13px;
-            color: #6b7280;
-        }
-
-        /* Responsive */
-        @media (max-width: 768px) {
-            .sidebar {
-                transform: translateX(-100%);
-                animation: none;
-            }
-
-            .sidebar.open {
-                transform: translateX(0);
-            }
-
-            .main-content {
-                margin-left: 0;
-            }
-
-            .mobile-toggle {
-                display: block;
-            }
-
-            .hamburger {
-                display: flex;
-            }
-
-            .dashboard-content {
-                padding: 32px 20px;
-            }
-
-            .dashboard-content h1 {
-                font-size: 32px;
-            }
-
-            .tips-grid {
-                grid-template-columns: 1fr;
-            }
-
-            .stats-row {
-                flex-direction: column;
-            }
-
-            .form-container {
-                padding: 24px 18px;
-            }
-
-            .topbar {
-                padding: 12px 16px;
-            }
-        }
-
-        @media (max-width: 480px) {
-            .dashboard-content {
-                padding: 24px 14px;
-            }
-
-            .dashboard-content h1 {
-                font-size: 26px;
-                letter-spacing: -1px;
-            }
-
-            .hero-subtitle {
-                font-size: 15px;
-            }
-
-            .form-container {
-                padding: 20px 14px;
-            }
-
-            .form-container textarea {
-                font-size: 14px;
-                min-height: 100px;
-            }
-
-            .generate-btn {
-                padding: 14px;
-                font-size: 15px;
-            }
-
-            .stat-number {
-                font-size: 26px;
-            }
-
-            .stat-label {
-                font-size: 12px;
-            }
-
-            .topbar {
-                padding: 10px 14px;
-            }
-
-            .topbar-greeting {
-                font-size: 13px;
-            }
-        }
-
-        /* Overlay for mobile sidebar */
-        .sidebar-overlay {
-            display: none;
-            position: fixed;
-            inset: 0;
-            background: rgba(0, 0, 0, 0.6);
-            z-index: 999;
-        }
-
-        .sidebar-overlay.active {
-            display: block;
-        }
-
-        /* Loading Overlay */
-        .loading-overlay {
-            display: none;
-            position: fixed;
-            inset: 0;
-            background: rgba(8, 6, 14, 0.88);
-            backdrop-filter: blur(20px);
-            z-index: 2000;
-            align-items: center;
-            justify-content: center;
-            flex-direction: column;
-            animation: fadeIn 0.3s ease;
-        }
-
-        .loading-overlay.active {
-            display: flex;
-        }
-
-        .loading-card {
-            background: rgba(255, 255, 255, 0.06);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 24px;
-            padding: 48px 56px;
-            max-width: 440px;
-            width: 90%;
-            text-align: center;
-            animation: scaleIn 0.4s ease;
-        }
-
-        @keyframes scaleIn {
-            from { opacity: 0; transform: scale(0.92); }
-            to { opacity: 1; transform: scale(1); }
-        }
-
-        .loading-title {
-            font-size: 20px;
-            font-weight: 600;
-            color: #e4e4e7;
-            margin-bottom: 8px;
-        }
-
-        .progress-percentage {
-            font-size: 56px;
-            font-weight: 800;
-            font-variant-numeric: tabular-nums;
-            letter-spacing: -2px;
-            margin-bottom: 8px;
-            line-height: 1;
-            background: linear-gradient(135deg, #c4b5fd, #a78bfa, #8b5cf6);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-
-        .progress-label {
-            font-size: 14px;
-            color: #6b7280;
-            margin-bottom: 24px;
-            font-weight: 500;
-        }
-
-        .progress-bar-container {
-            width: 100%;
-            height: 6px;
-            background: rgba(255, 255, 255, 0.08);
-            border-radius: 3px;
-            overflow: hidden;
-        }
-
-        .progress-bar-fill {
-            height: 100%;
-            background: linear-gradient(90deg, #7c3aed, #a78bfa, #c084fc);
-            border-radius: 3px;
-            width: 0%;
-            transition: width 0.6s ease;
-        }
-
-        .loading-error {
-            display: none;
-            color: #f87171;
-            font-size: 15px;
-            margin-top: 20px;
-        }
-
-        .loading-error.show {
-            display: block;
-        }
-
-        .loading-close {
-            display: none;
-            margin-top: 16px;
-            padding: 10px 28px;
-            background: rgba(255, 255, 255, 0.1);
-            border: 1px solid rgba(255, 255, 255, 0.15);
-            border-radius: 10px;
-            color: #e4e4e7;
-            font-size: 14px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s;
-            font-family: inherit;
-        }
-
-        .loading-close:hover {
-            background: rgba(255, 255, 255, 0.15);
-        }
-
-        .loading-close.show {
-            display: inline-block;
-        }
-    </style>
+    <title>{{ t.dashboard }} — PresentAI</title>
+    <meta name="theme-color" content="#070711">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/presentai.css') }}">
 </head>
 <body>
-    <!-- Sidebar -->
-    <aside class="sidebar" id="sidebar">
-        <a href="/dashboard" class="sidebar-logo">PresentAI</a>
+<a class="skip-link" href="#main">Skip to content</a>
 
-        <nav class="sidebar-nav">
-            <a href="/dashboard" class="sidebar-link active">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
+<div class="aurora" aria-hidden="true"></div>
+<div class="grain" aria-hidden="true"></div>
+
+<div class="shell">
+
+    <!-- ============ SIDEBAR ============ -->
+    <aside class="sidebar" id="sidebar">
+        <a href="/dashboard" class="brand">
+            <span class="brand-mark" aria-hidden="true">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 3l1.9 5.3L19 10l-5.1 1.7L12 17l-1.9-5.3L5 10l5.1-1.7z"/>
+                </svg>
+            </span>
+            PresentAI
+        </a>
+
+        <nav class="sidebar-nav" aria-label="Sidebar">
+            <a href="/dashboard" class="sidebar-link active" aria-current="page">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/>
+                    <rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/>
                 </svg>
                 {{ t.dashboard }}
             </a>
             <a href="/profile" class="sidebar-link">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
                 </svg>
                 {{ t.profile }}
             </a>
             <a href="/history" class="sidebar-link">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/><path d="M12 7v5l4 2"/>
                 </svg>
                 {{ t.history }}
             </a>
         </nav>
 
-        <a href="/logout" class="sidebar-logout">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
-            </svg>
-            {{ t.logout }}
-        </a>
-
-        <div class="sidebar-user">
-            <div class="sidebar-user-name">{{ user }}</div>
+        <div class="sidebar-foot">
+            <a href="/logout" class="sidebar-link">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/>
+                </svg>
+                {{ t.logout }}
+            </a>
+            <div class="sidebar-user">
+                <span class="avatar" aria-hidden="true">{{ user[0] | upper }}</span>
+                <span style="font-weight:600; font-size:.9375rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ user }}</span>
+            </div>
         </div>
     </aside>
 
-    <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
 
-    <!-- Main Content -->
-    <div class="main-content">
-        <div class="topbar">
-            <div class="hamburger" id="hamburger" onclick="toggleSidebar()">
-                <span></span>
-                <span></span>
-                <span></span>
+    <!-- ============ MAIN ============ -->
+    <div class="main">
+        <header class="topbar">
+            <button class="hamburger" id="hamburger" type="button"
+                    aria-label="Toggle sidebar" aria-expanded="false" aria-controls="sidebar"
+                    onclick="toggleSidebar()">
+                <span></span><span></span><span></span>
+            </button>
+            <p class="muted" style="font-size:.9375rem;">{{ t.welcome }}, <strong style="color:var(--text);">{{ user }}</strong></p>
+        </header>
+
+        <main class="content content-narrow" id="main">
+
+            <!-- Prompt -->
+            <div style="text-align:center; margin-bottom: var(--s-7);">
+                <h1 style="font-size: clamp(1.9rem, 1.3rem + 2.6vw, 3rem); margin-bottom: var(--s-4);">
+                    {{ t.create_title }} <span class="grad-text">{{ t.stunning_pres }}</span><br>{{ t.in_seconds }}
+                </h1>
+                <p class="lede" style="margin-inline:auto;">{{ t.hero_subtitle }}</p>
             </div>
-            <div class="topbar-greeting">{{ t.welcome }}, <strong>{{ user }}</strong></div>
-            <div></div>
-        </div>
 
-        <div class="dashboard-content">
-            <h1>{{ t.create_title }} <span class="gradient-text">{{ t.stunning_pres }}</span><br>{{ t.in_seconds }}</h1>
-            <p class="hero-subtitle">{{ t.hero_subtitle }}</p>
-
-            <div class="form-container">
+            <div class="card spotlight" style="margin-bottom: var(--s-7);">
                 <form id="generateForm">
-                    <label class="form-label">{{ t.describe_pres }}</label>
-                    <div class="textarea-wrapper">
+                    <label class="label" for="userPrompt">{{ t.describe_pres }}</label>
+                    <div style="position:relative;">
                         <textarea
+                            class="textarea"
                             name="user_prompt"
-                            rows="4"
-                            placeholder="Example: The future of AI in healthcare - covering diagnosis, treatment, patient care, and ethical considerations"
+                            rows="5"
+                            placeholder="Example: The future of AI in healthcare — covering diagnosis, treatment, patient care, and ethical considerations"
                             required
                             maxlength="1000"
                             id="userPrompt"
+                            data-counter="charCount"
+                            data-maxheight="300"
+                            style="padding-bottom: var(--s-7);"
                         ></textarea>
                         <span class="char-counter"><span id="charCount">0</span>/1000</span>
                     </div>
-                    <button type="submit" class="generate-btn" id="generateBtn">
+
+                    <button type="submit" class="btn btn-primary btn-lg btn-block" id="generateBtn" style="margin-top: var(--s-4);">
+                        <span class="btn-spinner" aria-hidden="true"></span>
                         <span>{{ t.generate }}</span>
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M5 12h14M13 6l6 6-6 6"/>
+                        </svg>
                     </button>
                 </form>
             </div>
 
-    <!-- Loading Overlay -->
-    <div class="loading-overlay" id="loadingOverlay">
-        <div class="loading-card">
-            <div class="loading-title">{{ t.loading_generating }}</div>
-            <div class="progress-percentage" id="progressPercent">0%</div>
-            <div class="progress-label" id="progressLabel">0% {{ t.loading_completed }}</div>
-            <div class="progress-bar-container">
-                <div class="progress-bar-fill" id="progressBar"></div>
-            </div>
-            <div class="loading-error" id="loadingError"></div>
-            <button class="loading-close" id="loadingClose" onclick="hideLoading()">Close</button>
-        </div>
-    </div>
-
-            <h3 class="tips-title">{{ t.tips_title }}</h3>
-            <div class="tips-grid">
-                <div class="tip-card">
-                    <span class="tip-icon">&#127919;</span>
-                    <p class="tip-text">{{ t.tip1 }}</p>
-                </div>
-                <div class="tip-card">
-                    <span class="tip-icon">&#128202;</span>
-                    <p class="tip-text">{{ t.tip2 }}</p>
-                </div>
-                <div class="tip-card">
-                    <span class="tip-icon">&#127912;</span>
-                    <p class="tip-text">{{ t.tip3 }}</p>
-                </div>
-                <div class="tip-card">
-                    <span class="tip-icon">&#9889;</span>
-                    <p class="tip-text">{{ t.tip4 }}</p>
-                </div>
-            </div>
-
-            <div class="stats-row">
-                <div class="stat-card">
-                    <div class="stat-number">50K+</div>
-                    <div class="stat-label">{{ t.pres_created }}</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-number">10K+</div>
-                    <div class="stat-label">{{ t.happy_users }}</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-number">98%</div>
-                    <div class="stat-label">{{ t.satisfaction }}</div>
-                </div>
-            </div>
-
-            <div class="dashboard-footer">
-                <div class="footer-social">
-                    <h3>{{ t.social_title }}</h3>
-                    <div class="social-links">
-                        <a href="https://instagram.com/mirzoulugbek.fazilov" target="_blank" rel="noopener noreferrer" class="social-link">Instagram</a>
-                        <a href="https://t.me/MirzoUlugbek_Diary" target="_blank" rel="noopener noreferrer" class="social-link">Telegram</a>
-                        <a href="https://tiktok.com/@mirzoulugbek.fazilov" target="_blank" rel="noopener noreferrer" class="social-link">TikTok</a>
-                        <a href="https://www.linkedin.com/in/mirzo-ulugbek-fazilov-a90b9a309/" target="_blank" rel="noopener noreferrer" class="social-link">LinkedIn</a>
+            <!-- Tips -->
+            <section style="margin-bottom: var(--s-7);">
+                <h2 style="font-size:1.25rem; margin-bottom: var(--s-5);">{{ t.tips_title }}</h2>
+                <div class="grid grid-2">
+                    <div class="card" style="padding: var(--s-5); display:flex; gap:var(--s-4); align-items:flex-start;">
+                        <span class="icon-tile" style="width:36px;height:36px;margin:0;" aria-hidden="true">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+                        </span>
+                        <p class="muted" style="font-size:.9375rem;">{{ t.tip1 }}</p>
+                    </div>
+                    <div class="card" style="padding: var(--s-5); display:flex; gap:var(--s-4); align-items:flex-start;">
+                        <span class="icon-tile" style="width:36px;height:36px;margin:0;" aria-hidden="true">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+                        </span>
+                        <p class="muted" style="font-size:.9375rem;">{{ t.tip2 }}</p>
+                    </div>
+                    <div class="card" style="padding: var(--s-5); display:flex; gap:var(--s-4); align-items:flex-start;">
+                        <span class="icon-tile" style="width:36px;height:36px;margin:0;" aria-hidden="true">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+                        </span>
+                        <p class="muted" style="font-size:.9375rem;">{{ t.tip3 }}</p>
+                    </div>
+                    <div class="card" style="padding: var(--s-5); display:flex; gap:var(--s-4); align-items:flex-start;">
+                        <span class="icon-tile" style="width:36px;height:36px;margin:0;" aria-hidden="true">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+                        </span>
+                        <p class="muted" style="font-size:.9375rem;">{{ t.tip4 }}</p>
                     </div>
                 </div>
-                <p class="footer-copyright">&copy; 2026 PresentAI. {{ t.copyright }}</p>
-            </div>
-        </div>
+            </section>
+
+            <!-- Stats -->
+            <section class="grid grid-stats" style="margin-bottom: var(--s-7);">
+                <div class="stat card" style="padding: var(--s-5);">
+                    <div class="stat-value"><span data-count-to="50" data-suffix="K+">50K+</span></div>
+                    <div class="stat-label">{{ t.pres_created }}</div>
+                </div>
+                <div class="stat card" style="padding: var(--s-5);">
+                    <div class="stat-value"><span data-count-to="10" data-suffix="K+">10K+</span></div>
+                    <div class="stat-label">{{ t.happy_users }}</div>
+                </div>
+                <div class="stat card" style="padding: var(--s-5);">
+                    <div class="stat-value"><span data-count-to="98" data-suffix="%">98%</span></div>
+                    <div class="stat-label">{{ t.satisfaction }}</div>
+                </div>
+            </section>
+
+            <!-- Social -->
+            <footer class="footer" style="margin-top: var(--s-7);">
+                <h3 style="font-size:.9375rem; margin-bottom: var(--s-4);">{{ t.social_title }}</h3>
+                <div class="social-row" style="margin-bottom: var(--s-5);">
+                    <a href="https://instagram.com/mirzoulugbek.fazilov" target="_blank" rel="noopener noreferrer" class="social-link" aria-label="Instagram">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1"/>
+                        </svg>
+                    </a>
+                    <a href="https://t.me/MirzoUlugbek_Diary" target="_blank" rel="noopener noreferrer" class="social-link" aria-label="Telegram">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M21.9 4.3 18.7 19.4c-.2 1.1-.9 1.3-1.8.8l-4.9-3.6-2.4 2.3c-.3.3-.5.5-1 .5l.3-5 9.1-8.2c.4-.4-.1-.6-.6-.2L6.2 13.1l-4.8-1.5c-1-.3-1.1-1 .2-1.5l18.9-7.3c.9-.3 1.6.2 1.4 1.5z"/>
+                        </svg>
+                    </a>
+                    <a href="https://tiktok.com/@mirzoulugbek.fazilov" target="_blank" rel="noopener noreferrer" class="social-link" aria-label="TikTok">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M16.6 5.8a4.8 4.8 0 0 1-1.2-3.1h-3.1v12.4a2.6 2.6 0 1 1-2.6-2.6c.27 0 .53.04.78.12V9.4a5.8 5.8 0 1 0 4.92 5.73V9.01a7.9 7.9 0 0 0 4.6 1.47V7.37a4.8 4.8 0 0 1-3.4-1.57z"/>
+                        </svg>
+                    </a>
+                    <a href="https://www.linkedin.com/in/mirzo-ulugbek-fazilov-a90b9a309/" target="_blank" rel="noopener noreferrer" class="social-link" aria-label="LinkedIn">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M4.98 3.5a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5zM3 9h4v12H3zM9 9h3.8v1.7h.05c.53-1 1.83-2.05 3.75-2.05 4 0 4.75 2.63 4.75 6.05V21H17.6v-5.5c0-1.31-.03-3-1.83-3-1.84 0-2.12 1.43-2.12 2.9V21H9z"/>
+                        </svg>
+                    </a>
+                </div>
+                <p class="dim" style="font-size:.875rem;">&copy; 2026 PresentAI. {{ t.copyright }}</p>
+            </footer>
+
+        </main>
     </div>
+</div>
 
-    <script>
-        const userPrompt = document.getElementById('userPrompt');
-        const charCount = document.getElementById('charCount');
-        userPrompt.addEventListener('input', () => {
-            charCount.textContent = userPrompt.value.length;
+<!-- ============ GENERATION PROGRESS ============ -->
+<div class="loading-overlay" id="loadingOverlay" role="dialog" aria-modal="true" aria-labelledby="loadingTitle">
+    <div class="loading-box">
+        <div class="loading-orb" aria-hidden="true"></div>
+        <div class="loading-title" id="loadingTitle">{{ t.loading_generating }}</div>
+        <div class="progress-percentage" id="progressPercent">0%</div>
+        <div class="progress-label" id="progressLabel">0% {{ t.loading_completed }}</div>
+        <div class="progress-track">
+            <div class="progress-bar-fill" id="progressBar"></div>
+        </div>
+        <div class="loading-error" id="loadingError" role="alert"></div>
+        <button class="btn btn-ghost loading-close" id="loadingClose" onclick="hideLoading()">Close</button>
+    </div>
+</div>
+
+<script src="{{ url_for('static', filename='js/presentai.js') }}" defer></script>
+<script>
+    // ---- Generation progress + AJAX download ----
+    var userPrompt     = document.getElementById('userPrompt');
+    var overlay        = document.getElementById('loadingOverlay');
+    var progressBar    = document.getElementById('progressBar');
+    var progressPercent= document.getElementById('progressPercent');
+    var progressLabel  = document.getElementById('progressLabel');
+    var loadingError   = document.getElementById('loadingError');
+    var loadingClose   = document.getElementById('loadingClose');
+    var generateBtn    = document.getElementById('generateBtn');
+    var completedText  = "{{ t.loading_completed }}";
+
+    // Simulated timeline (seconds → percent). Real progress isn't observable,
+    // so this paces expectation against the typical ~90s generation.
+    var timeline = [
+        { at: 0, pct: 3 },  { at: 2, pct: 8 },  { at: 5, pct: 15 }, { at: 8, pct: 22 },
+        { at: 12, pct: 30 },{ at: 16, pct: 38 },{ at: 20, pct: 45 },{ at: 25, pct: 52 },
+        { at: 30, pct: 58 },{ at: 36, pct: 64 },{ at: 42, pct: 70 },{ at: 48, pct: 75 },
+        { at: 54, pct: 80 },{ at: 60, pct: 84 },{ at: 68, pct: 88 },{ at: 76, pct: 91 },
+        { at: 85, pct: 93 },{ at: 95, pct: 95 }
+    ];
+
+    var progressTimers = [];
+
+    function setProgress(pct) {
+        progressBar.style.width = pct + '%';
+        progressPercent.textContent = pct + '%';
+        progressLabel.textContent = pct + '% ' + completedText;
+    }
+
+    function showLoading() {
+        overlay.classList.add('active');
+        document.body.style.overflow = 'hidden';
+        generateBtn.setAttribute('aria-busy', 'true');
+        generateBtn.disabled = true;
+        setProgress(0);
+        loadingError.classList.remove('show');
+        loadingError.textContent = '';
+        loadingClose.classList.remove('show');
+
+        timeline.forEach(function (t) {
+            progressTimers.push(setTimeout(function () { setProgress(t.pct); }, t.at * 1000));
         });
-        userPrompt.addEventListener('input', function() {
-            this.style.height = 'auto';
-            this.style.height = Math.min(this.scrollHeight, 300) + 'px';
-        });
+    }
 
-        function toggleSidebar() {
-            document.getElementById('sidebar').classList.toggle('open');
-            document.getElementById('sidebarOverlay').classList.toggle('active');
-            document.getElementById('hamburger').classList.toggle('active');
-        }
+    function clearTimers() {
+        progressTimers.forEach(clearTimeout);
+        progressTimers = [];
+    }
 
-        // Loading animation system
-        const overlay = document.getElementById('loadingOverlay');
-        const progressBar = document.getElementById('progressBar');
-        const progressPercent = document.getElementById('progressPercent');
-        const progressLabel = document.getElementById('progressLabel');
-        const loadingError = document.getElementById('loadingError');
-        const loadingClose = document.getElementById('loadingClose');
-        const completedText = "{{ t.loading_completed }}";
+    function releaseButton() {
+        generateBtn.removeAttribute('aria-busy');
+        generateBtn.disabled = false;
+    }
 
-        // Simulated percentage timeline (seconds → percent)
-        const timeline = [
-            { at: 0, pct: 3 },
-            { at: 2, pct: 8 },
-            { at: 5, pct: 15 },
-            { at: 8, pct: 22 },
-            { at: 12, pct: 30 },
-            { at: 16, pct: 38 },
-            { at: 20, pct: 45 },
-            { at: 25, pct: 52 },
-            { at: 30, pct: 58 },
-            { at: 36, pct: 64 },
-            { at: 42, pct: 70 },
-            { at: 48, pct: 75 },
-            { at: 54, pct: 80 },
-            { at: 60, pct: 84 },
-            { at: 68, pct: 88 },
-            { at: 76, pct: 91 },
-            { at: 85, pct: 93 },
-            { at: 95, pct: 95 },
-        ];
+    function finishLoading() {
+        clearTimers();
+        setProgress(100);
+        setTimeout(hideLoading, 800);
+    }
 
-        let progressTimers = [];
+    function showLoadingError(msg) {
+        clearTimers();
+        releaseButton();
+        loadingError.textContent = msg;
+        loadingError.classList.add('show');
+        loadingClose.classList.add('show');
+    }
 
-        function setProgress(pct) {
-            progressBar.style.width = pct + '%';
-            progressPercent.textContent = pct + '%';
-            progressLabel.textContent = pct + '% ' + completedText;
-        }
+    function hideLoading() {
+        overlay.classList.remove('active');
+        document.body.style.overflow = '';
+        clearTimers();
+        releaseButton();
+    }
 
-        function showLoading() {
-            overlay.classList.add('active');
-            document.body.style.overflow = 'hidden';
-            setProgress(0);
-            loadingError.classList.remove('show');
-            loadingError.textContent = '';
-            loadingClose.classList.remove('show');
+    document.getElementById('generateForm').addEventListener('submit', async function (e) {
+        e.preventDefault();
+        var prompt = userPrompt.value.trim();
+        if (!prompt) return;
 
-            timeline.forEach(t => {
-                const timer = setTimeout(() => setProgress(t.pct), t.at * 1000);
-                progressTimers.push(timer);
-            });
-        }
+        showLoading();
 
-        function finishLoading() {
-            progressTimers.forEach(clearTimeout);
-            progressTimers = [];
-            setProgress(100);
-            setTimeout(() => hideLoading(), 800);
-        }
+        try {
+            var formData = new FormData();
+            formData.append('user_prompt', prompt);
 
-        function showLoadingError(msg) {
-            progressTimers.forEach(clearTimeout);
-            progressTimers = [];
-            loadingError.textContent = msg;
-            loadingError.classList.add('show');
-            loadingClose.classList.add('show');
-        }
+            var response = await fetch('/generate_ppt', { method: 'POST', body: formData });
 
-        function hideLoading() {
-            overlay.classList.remove('active');
-            document.body.style.overflow = '';
-            progressTimers.forEach(clearTimeout);
-            progressTimers = [];
-        }
-
-        // AJAX form submission
-        document.getElementById('generateForm').addEventListener('submit', async function(e) {
-            e.preventDefault();
-            const prompt = userPrompt.value.trim();
-            if (!prompt) return;
-
-            showLoading();
-
-            try {
-                const formData = new FormData();
-                formData.append('user_prompt', prompt);
-
-                const response = await fetch('/generate_ppt', {
-                    method: 'POST',
-                    body: formData
-                });
-
-                if (!response.ok) {
-                    let msg = 'Generation failed. Please try again.';
+            if (!response.ok) {
+                var msg = 'Generation failed. Please try again.';
+                try {
+                    var text = await response.text();
                     try {
-                        const text = await response.text();
-                        try {
-                            const errData = JSON.parse(text);
-                            if (errData.error) msg = errData.error;
-                        } catch(_) {
-                            if (text) msg = text;
-                        }
-                    } catch(_) {}
-                    throw new Error(msg);
-                }
-
-                // Get the file blob and trigger download
-                const blob = await response.blob();
-                const disposition = response.headers.get('Content-Disposition') || '';
-                let filename = 'presentation.pptx';
-                const match = disposition.match(/filename\*?=(?:UTF-8''|")?(.*?)(?:"|;|$)/i);
-                if (match) filename = decodeURIComponent(match[1]);
-
-                // Complete the progress
-                finishLoading();
-
-                // Trigger download
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = filename;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
-            } catch (err) {
-                showLoadingError(err.message || 'Something went wrong. Please try again.');
+                        var errData = JSON.parse(text);
+                        if (errData.error) msg = errData.error;
+                    } catch (_) {
+                        if (text) msg = text;
+                    }
+                } catch (_) {}
+                throw new Error(msg);
             }
-        });
-    </script>
+
+            var blob = await response.blob();
+            var disposition = response.headers.get('Content-Disposition') || '';
+            var filename = 'presentation.pptx';
+            var match = disposition.match(/filename\*?=(?:UTF-8''|")?(.*?)(?:"|;|$)/i);
+            if (match) filename = decodeURIComponent(match[1]);
+
+            finishLoading();
+
+            var url = URL.createObjectURL(blob);
+            var a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        } catch (err) {
+            showLoadingError(err.message || 'Something went wrong. Please try again.');
+        }
+    });
+</script>
 </body>
 </html>
