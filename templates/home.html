@@ -104,10 +104,15 @@
                         id="userPrompt"
                         data-counter="charCount"
                         data-maxheight="260"
+                        data-submit-on-enter
+                        data-enter-hint="enterHint"
                         style="padding-bottom: var(--s-7);"
                     ></textarea>
                     <span class="char-counter"><span id="charCount">0</span>/500</span>
                 </div>
+                <p class="dim" id="enterHint" style="font-size:.8125rem; margin-top: var(--s-2);">
+                    Press <kbd>Enter</kbd> to generate · <kbd>Shift</kbd>+<kbd>Enter</kbd> for a new line
+                </p>
 
                 <button type="submit" class="btn btn-primary btn-lg btn-block" id="heroGenerateBtn" style="margin-top: var(--s-4);">
                     <span class="btn-spinner" aria-hidden="true"></span>

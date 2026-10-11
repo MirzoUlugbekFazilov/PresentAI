@@ -99,6 +99,54 @@
     });
   }
 
+  /* ---------- Enter to submit ---------- */
+  // Enter generates, Shift+Enter adds a line. Opt in with
+  // data-submit-on-enter on the textarea.
+  function initEnterSubmit() {
+    var fields = document.querySelectorAll('[data-submit-on-enter]');
+    if (!fields.length) return;
+
+    // Soft keyboards use Enter as the newline key and give no easy
+    // Shift+Enter, so hijacking it on touch would strand people mid-sentence.
+    var touch = window.matchMedia('(pointer: coarse)').matches;
+
+    fields.forEach(function (ta) {
+      var form = ta.form;
+      if (!form) return;
+
+      if (touch) {
+        // Drop the desktop-only hint rather than promise a key that won't work.
+        var hint = document.getElementById(ta.getAttribute('data-enter-hint'));
+        if (hint) hint.hidden = true;
+        return;
+      }
+
+      ta.addEventListener('keydown', function (e) {
+        if (e.key !== 'Enter') return;
+        if (e.shiftKey || e.altKey || e.ctrlKey || e.metaKey) return;
+        // Mid-composition Enter commits the candidate (Chinese/Japanese/
+        // Korean input) — submitting there would eat the user's word.
+        if (e.isComposing || e.keyCode === 229) return;
+        if (!ta.value.trim()) return;
+
+        var btn = form.querySelector('[type="submit"]');
+        if (btn && (btn.disabled || btn.getAttribute('aria-busy') === 'true')) {
+          e.preventDefault();          // already generating
+          return;
+        }
+
+        e.preventDefault();
+        // requestSubmit fires the submit event (so AJAX handlers run);
+        // form.submit() would bypass them entirely.
+        if (typeof form.requestSubmit === 'function') {
+          form.requestSubmit(btn || undefined);
+        } else {
+          form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+        }
+      });
+    });
+  }
+
   /* ---------- Password reveal ---------- */
   var EYE = '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>';
   var EYE_OFF = '<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>';
@@ -208,10 +256,12 @@
     initNavScroll();
     initMobileMenu();
     initCounters();
+    initEnterSubmit();
     initPasswordToggles();
     initSidebar();
     initModals();
     initCountUp();
+    window.__paReady = true;   // lets tests know handlers are attached
   }
 
   if (document.readyState === 'loading') {
