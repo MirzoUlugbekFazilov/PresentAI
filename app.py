@@ -1138,6 +1138,38 @@ def centre_top(block_h, top=None, bottom=None, bias=0.32):
     return max(top, top + (bottom - top - block_h) * bias)
 
 
+# PowerPoint and Keynote spellcheck any run that doesn't say otherwise, which
+# painted red squiggles under perfectly good generated copy — and worse under
+# non-English decks, where the checker guesses the wrong dictionary. Tag every
+# run with its language and switch proofing off.
+LANG_TAGS = {
+    "English": "en-US", "Spanish": "es-ES", "French": "fr-FR",
+    "German": "de-DE", "Italian": "it-IT", "Portuguese": "pt-PT",
+    "Russian": "ru-RU", "Chinese": "zh-CN", "Japanese": "ja-JP",
+    "Korean": "ko-KR", "Arabic": "ar-SA", "Hindi": "hi-IN", "Uzbek": "uz-Latn-UZ",
+}
+
+
+def disable_spellcheck(prs, lang="en-US"):
+    """Set lang + noProof on every run so viewers stop underlining the text."""
+    for slide in prs.slides:
+        for shape in slide.shapes:
+            if not shape.has_text_frame:
+                continue
+            for para in shape.text_frame.paragraphs:
+                for run in para.runs:
+                    rPr = run._r.get_or_add_rPr()
+                    rPr.set("lang", lang)
+                    rPr.set("noProof", "1")
+                # the trailing run-properties stub carries the same flags
+                end = para._p.find(
+                    "{http://schemas.openxmlformats.org/drawingml/2006/main}endParaRPr"
+                )
+                if end is not None:
+                    end.set("lang", lang)
+                    end.set("noProof", "1")
+
+
 def add_card(slide, left, top, width, height, bg_color=None, accent_color=None):
     """Rounded card with optional colored accent bar at top edge."""
     card = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, left, top, width, height)
@@ -1953,14 +1985,29 @@ def slide_9b_quote_image(prs, data, image_bytes=None):
         quote = " ".join(
             x for x in (data.get("stat_number", ""), data.get("stat_label", "")) if x
         ).strip()
+    # The rule used to be a flat 1.80" starting almost at the title, so a
+    # one-line quote left it towering above and below the text. Measure the
+    # quote, match the rule to it, and sit the pair lower in the column so it
+    # reads against the image rather than crowding the heading.
+    # 28pt at PowerPoint's ~1.2 default leading is 0.467" per line, plus the
+    # text frame's 0.05" top and bottom insets. Guessing high here left the
+    # rule hanging below the last baseline.
+    Q_PT, Q_LEAD, Q_INSET = 28, 0.467, 0.05
+    q_lines = _lines_needed(quote, text_w - 0.60, Q_PT)
+    q_h = q_lines * Q_LEAD + Q_INSET * 2
+    bl_h = measure_bullets(data["bullets"], text_w, BODY_PT)
+    block_h = q_h + 0.45 + bl_h
+    q_y = centre_top(block_h, top=CT, bottom=IMG_TOP + IMG_SZ, bias=0.42)
+
+    # Rule spans exactly the text block, inset to inset.
     line = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE,
-                                   Inches(MG), Inches(CT + 0.10),
-                                   Pt(5), Inches(1.80))
+                                   Inches(MG), Inches(q_y + Q_INSET),
+                                   Pt(5), Inches(q_lines * Q_LEAD))
     line.fill.solid()
     line.fill.fore_color.rgb = WARM_CORAL
     line.line.fill.background()
-    qbox = slide.shapes.add_textbox(Inches(MG + 0.30), Inches(CT),
-                                     Inches(text_w - 0.30), Inches(2.00))
+    qbox = slide.shapes.add_textbox(Inches(MG + 0.30), Inches(q_y),
+                                     Inches(text_w - 0.30), Inches(q_h))
     qf = qbox.text_frame
     qf.clear()
     qf.word_wrap = True
@@ -1970,9 +2017,10 @@ def slide_9b_quote_image(prs, data, image_bytes=None):
     qr.font.size = Pt(28)
     qr.font.bold = True
     qr.font.color.rgb = CHARCOAL
-    add_bullet_text(slide, Inches(MG), Inches(CT + 2.50),
-                    Inches(text_w), Inches(2.50),
-                    data["bullets"], bullet_color=TEAL, font_size=14)
+    add_bullet_text(slide, Inches(MG), Inches(q_y + q_h + 0.45),
+                    Inches(text_w),
+                    Inches(max(CANVAS_BOTTOM - (q_y + q_h + 0.45), 0.4)),
+                    data["bullets"], bullet_color=TEAL, font_size=BODY_PT)
     add_slide_number(slide, 9, TOTAL_SLIDES)
 
 
@@ -2289,6 +2337,13 @@ def generate_ppt():
             slide_9a_stat_image(prs, slides[9], images.get(9))
 
         slide_10_closing_cta(prs, slides[10])
+
+        # Tag runs with the deck's language and turn proofing off, so the
+        # user doesn't open their deck to red squiggles under every line.
+        disable_spellcheck(
+            prs, LANG_TAGS.get(session.get("language", "English"), "en-US")
+        )
+
         buf = BytesIO()
         prs.save(buf)
 

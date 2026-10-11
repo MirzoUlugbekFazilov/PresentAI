@@ -182,6 +182,23 @@ h3 { font-size: clamp(1.15rem, 1rem + .7vw, 1.5rem); }
 .muted { color: var(--text-muted); }
 .dim   { color: var(--text-dim); }
 
+/* Keycap — used in the "press Enter to generate" affordance */
+kbd {
+  display: inline-block;
+  padding: 1px 6px;
+  margin-inline: 1px;
+  font-family: inherit;
+  font-size: .8125em;
+  font-weight: 600;
+  line-height: 1.5;
+  color: var(--text-muted);
+  background: rgba(255, 255, 255, .07);
+  border: 1px solid var(--glass-border);
+  border-bottom-width: 2px;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+
 /* Gradient text — animated sheen across the fill */
 .grad-text {
   background: linear-gradient(100deg, var(--violet-300) 0%, var(--cyan-400) 45%, var(--violet-400) 100%);
